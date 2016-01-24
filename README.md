@@ -3,9 +3,11 @@
 The [master branch][] reflects the upstream [musl][] without any modifications.
 Other branches are used for WebAssembly-specific experiments.
 
+The prototype branches are just that: experimental prototypes.
+
 **Don't commit to the master branch except to update from musl!**
 
-To do so:
+To update the master branch:
 
 ```
 git clone --origin wasm git@github.com:WebAssembly/musl.git
