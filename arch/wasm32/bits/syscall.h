@@ -344,7 +344,7 @@
 #define __NR_process_vm_writev	348
 #define __NR_kcmp		349
 #define __NR_finit_module	350
-
+#define __NR_membarrier		375
 
 /* Repeated with SYS_ prefix */
 
@@ -694,3 +694,4 @@
 #define SYS_process_vm_writev	348
 #define SYS_kcmp		349
 #define SYS_finit_module	350
+#define SYS_membarrier		375

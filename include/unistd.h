@@ -173,7 +173,7 @@ void setusershell(void);
 void endusershell(void);
 char *getusershell(void);
 int acct(const char *);
-long syscall(long, ...);
+//long syscall(long, ...);
 int execvpe(const char *, char *const [], char *const []);
 int issetugid(void);
 #endif
