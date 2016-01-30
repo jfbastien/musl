@@ -17,7 +17,8 @@
 /*
  * Support JavaScript code to run WebAssembly in a JavaScript shell.
  *
- * This is a giant hack which stands in for a real libc and runtime.
+ * This is a giant hack which stands in for a real libc and runtime. It acts
+ * both as a hobbling libc and a linker/loader, including dynamic linking.
  */
 
 var HEAP_SIZE_BYTES = 1 << 20;
@@ -810,6 +811,7 @@ var musl_hack = (function() {
 // Syscall API with C libraries. In theory this is the only JavaScript
 // implementation we need.
 var syscall = (function() {
+  // TODO auto-generate syscall number from the header.
   return {
     __syscall0: function(n) { print('syscall(' + n + ')'); return -1; },
     __syscall1: function(n, a) {
@@ -857,13 +859,21 @@ var ffi = (function() {
 if (arguments.length < 1)
   throw new Error('Expected at least one wasm module to load.');
 
+function load_wasm(file_path) {
+  // TODO this should be split up in load, check dependencies, and then resolve
+  // dependencies. That would make it easier to do lazy loading. We could do
+  // this by catching load exceptions + adding to ffi and trying again, but
+  // we're talking silly there: modules should just tell us what they want.
+  return _WASMEXP_.instantiateModule(readbuffer(file_path), ffi, heap);
+}
+
 // Load modules in reverse, adding their exports to the ffi object.
 // This is analogous to how the linker resolves symbols: the later modules
-// export symbols used by the earlier modules.
+// export symbols used by the earlier modules, and allow shadowing.
 // Note that all modules, as well as the main module, share a heap.
 var modules = {};
 for (var i = arguments.length - 1; i > 0; --i) {
-  modules[i] = _WASMEXP_.instantiateModule(readbuffer(arguments[i]), ffi, heap);
+  modules[i] = load_wasm(arguments[i]);
   for (var f in modules[i]) {
     if (modules[i].hasOwnProperty(f) && modules[i][f] instanceof Function)
       ffi[f] = modules[i][f];
@@ -871,7 +881,7 @@ for (var i = arguments.length - 1; i > 0; --i) {
 }
 
 // Load the main module once the ffi object has been fully populated.
-modules[0] = _WASMEXP_.instantiateModule(readbuffer(arguments[0]), ffi, heap);
+modules[0] = load_wasm(arguments[0]);
 
 // TODO check that `main` exists in modules[0] and error out if not.
 
