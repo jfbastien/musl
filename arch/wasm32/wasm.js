@@ -811,31 +811,31 @@ var musl_hack = (function() {
 // implementation we need.
 var syscall = (function() {
   return {
-    __syscall0: function(n) { print('syscall(' + n + ')'); return 0; },
+    __syscall0: function(n) { print('syscall(' + n + ')'); return -1; },
     __syscall1: function(n, a) {
       print('syscall(' + n + ', ' + a + ')');
-      return 0; },
+      return -1; },
     __syscall2: function(n, a, b) {
       print('syscall(' + n + ', ' + a + ', ' + b + ')');
-      return 0; },
+      return -1; },
     __syscall3: function(n, a, b, c) {
       print('syscall(' + n + ', ' + a + ', ' + b + ', ' + c + ')');
-      return 0; },
+      return -1; },
     __syscall4: function(n, a, b, c, d) {
       print('syscall(' + n + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ')');
-      return 0; },
+      return -1; },
     __syscall5: function(n, a, b, c, d, e) {
       print('syscall(' + n + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ', ' +
             e + ')');
-      return 0; },
+      return -1; },
     __syscall6: function(n, a, b, c, d, e, f) {
       print('syscall(' + n + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ', ' +
             e + ', ' + f + ')');
-      return 0; },
+      return -1; },
     __syscall_cp: function(n, a, b, c, d, e, f) {
       print('syscall(' + n + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ', ' +
             e + ', ' + f + ')');
-      return 0; }
+      return -1; }
 };
 })();
 
