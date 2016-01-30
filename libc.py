@@ -170,8 +170,15 @@ class Compiler(object):
                    cwd=self.tmpdir)
 
 
-def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out):
-  tmpdir = tempfile.mkdtemp()
+def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps):
+  if save_temps:
+    tmpdir = os.path.join(os.getcwd(), 'libc_build')
+    if os.path.isdir(tmpdir):
+      shutil.rmtree(tmpdir)
+    os.mkdir(tmpdir)
+  else:
+    tmpdir = tempfile.mkdtemp()
+
   try:
     create_version(musl)
     build_alltypes(musl, arch)
@@ -182,7 +189,8 @@ def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out):
     compiler.link_assemble()
     compiler.binary()
   finally:
-    shutil.rmtree(tmpdir)
+    if not save_temps:
+      shutil.rmtree(tmpdir)
 
 
 def getargs():
@@ -201,6 +209,8 @@ def getargs():
   parser.add_argument('--out', '-o', type=str,
                       default=os.path.join(os.getcwd(), 'musl.wast'),
                       help='Output file')
+  parser.add_argument('--save-temps', default=False, action='store_true',
+                      help='Save temporary files')
   parser.add_argument('--verbose', default=False, action='store_true',
                       help='Verbose')
   return parser.parse_args()
@@ -212,4 +222,4 @@ if __name__ == '__main__':
     global verbose
     verbose = True
   sys.exit(run(args.clang_dir, args.binaryen_dir, args.sexpr_wasm,
-               args.musl, args.arch, args.out))
+               args.musl, args.arch, args.out, args.save_temps))
