@@ -35,7 +35,7 @@ BLACKLIST = [
     'printf.c', 'fprintf.c', 'fscanf.c', 'vfprintf.c', 'asprintf.c',
     'dprintf.c', 'scanf.c', 'sprintf.c', 'snprintf.c', 'sscanf.c',
     'vfscanf.c', 'vsnprintf.c',
-    'qsort.c', 'regexec.c', 'strftime.c', 'strptime.c',
+    'qsort.c', 'regexec.c', 'regcomp.c', 'strftime.c', 'strptime.c',
     'faccessat.c', 'floatscan.c', 'getcwd.c', 'glob.c', 'pclose.c',
     '__tz.c', 'pwrite.c', 'pread.c', '__fdopen.c', '__fopen_rb_ca.c',
     '__rem_pio2_large.c', '__stdio_read.c', '__stdio_write.c',
