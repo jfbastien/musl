@@ -219,7 +219,6 @@ def getargs():
 if __name__ == '__main__':
   args = getargs()
   if args.verbose:
-    global verbose
     verbose = True
   sys.exit(run(args.clang_dir, args.binaryen_dir, args.sexpr_wasm,
                args.musl, args.arch, args.out, args.save_temps))
