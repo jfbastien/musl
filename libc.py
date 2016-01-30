@@ -145,7 +145,7 @@ class Compiler(object):
 
   def compile(self, sources):
     if verbose:
-      return sorted([self(source) for source in sources])
+      self.compiled = sorted([self(source) for source in sources])
     else:
       pool = multiprocessing.Pool()
       self.compiled = sorted(pool.map(self, sources))
