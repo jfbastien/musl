@@ -1,5 +1,8 @@
 # WebAssembly experiment for musl libc with dynamic linking
 
+The main goal was to get a WebAssembly libc off the ground. Dynamic linking kind
+of came out of it *for free*.
+
 *Note:* This experimental WebAssembly C library with dynamic linking is a
 hack. Don't rely on it: it's meant to inform the design of WebAssembly. Things
 are changing rapidly, so mixing different parts of the toolchain may break from
