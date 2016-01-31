@@ -68,3 +68,36 @@ lazy-loading, where the developer can handle load failures. We could also easily
 implement `dlopen` and `dlsym`.
 
 It would also be good to be able to specify compilation / execution separately.
+
+## libc implementation details
+
+The current libc implementation builds a subset of musl using the hacked-up
+`libc.py` script. It excludes files which triggered bugs throughout the
+toolchain, not that the files being built are bug free either.
+
+The implementation is based on Emscripten's musl port, but is based on a much
+more recent musl and has no modifications to code musl: all changes are in the
+`arch/wasm32` directory. It aims to only communicate to the embedder using a
+syscall API, modeled after Linux' own syscall API. This may have shortcomings,
+but it's a good thing to try out since we can revisit later. Note the
+`musl_hack` functions in `wasm.js`: they fill in for functionality that's
+currently been hacked out and which musl expects to import. It should be
+exporting these instead. Maybe more functionality should be implemented in
+JavaScript, but experience with NaCl and Emscripten leads us to believe the
+syscall API is a good boundary.
+
+The eventual goal is for the WebAssembly libc to be upstreamed to musl, and
+that'll require *doing it right* according to the musl community. We also want
+Emscripten to be able to use the same libc implementation. The approach in this
+repository may not be the right one.
+
+## Miscellaneous
+
+Dynamic linking isn't in WebAssembly's current MVP because we thought it would
+be hard. This repository shows that it's *possible*, we therefore may as well
+design it right from the start.
+
+That'll including figuring out calling convention and ABI. Exports currently
+don't declare their signature in a WebAssembly module, even though they are in
+the binary format, and don't cause any failure when the APIs don't match. That
+should be fixed.
