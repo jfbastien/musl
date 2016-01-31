@@ -18,23 +18,23 @@ You can build everything yourself using the waterfall's
 [build.py](https://github.com/WebAssembly/waterfall/tree/master/src/build.py).
 
 Compile your program using LLVM:
-
+```
   clang -S foo.c
-
+```
 Creates a `.s` assembly file. Link it:
-
+```
   s2wasm foo.s -o foo.wast
-
+```
 Creates a `.wast` WebAssembly s-expression. Assemble it:
-
+```
   sexpr-wasm foo.wast -o foo.wasm
-
+```
 You now have a WebAssembly binary file.
 
 Run `.wasm` files which import libc functions:
-
+```
   d8 --expose-wasm musl/arch/wasm32/wasm.js -- foo.wasm musl-out/musl.wasm
-
+```
 This may work... or not. File bugs on what's broken, or send patches!
 
 ## libc + dynamic linking: how does it work?
