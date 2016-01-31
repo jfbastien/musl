@@ -65,7 +65,7 @@ so that the default pattern doesn't require gymnastics on the compiler's part.
 
 A WebAssembly module with un-met imports will throw. This can be handled, add
 the missing function as a stub to FFI, and then load again (loop until success)
-but its' silly. If WebAssembly modules were loadable, imports inspectable, and
+but it's silly. If WebAssembly modules were loadable, imports inspectable, and
 FFI object provided later then we'd be better off. We could implement very fancy
 lazy-loading, where the developer can handle load failures. We could also easily
 implement `dlopen` and `dlsym`.
