@@ -873,10 +873,14 @@ function load_wasm(file_path) {
 // Note that all modules, as well as the main module, share a heap.
 var modules = {};
 for (var i = arguments.length - 1; i > 0; --i) {
-  modules[i] = load_wasm(arguments[i]);
+  var path = arguments[i];
+  modules[i] = load_wasm(path);
   for (var f in modules[i]) {
-    if (modules[i].hasOwnProperty(f) && modules[i][f] instanceof Function)
-      ffi[f] = modules[i][f];
+    // TODO wasm modules don't have hasOwnProperty. They probably should.
+    //      The code shoudl look like:
+    //      if (modules[i].hasOwnProperty(f) &&
+    //          modules[i][f] instanceof Function)
+    ffi[f] = modules[i][f];
   }
 }
 
