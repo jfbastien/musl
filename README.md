@@ -242,7 +242,7 @@ the function from another module, and the implementation puts the functions in
 different tables. We could fix this by:
 
 * Forcing developers to use a function such as `dlcall` and provide handles for
-  the module and symbol.
+  the module and symbol. `dlcall` would trampoline through JavaScript.
 * Map functions from all module into the same table.
 * Map functions from other modules into the current one when `dlsym` is invoked,
   e.g. adding new functions to the `_WASMEXP_` instance. This also requires
