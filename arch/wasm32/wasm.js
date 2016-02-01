@@ -540,6 +540,25 @@ var unix = (function() {
   var open_files = new Uint8Array(OPEN_MAX);
 
   return {
+    // <dlfcn.h> constants.
+    RTLD_LAZY: 1,
+    RTLD_NOW: 2,
+    RTLD_NOLOAD: 4,
+    RTLD_NODELETE: 4096,
+    RTLD_GLOBAL: 256,
+    RTLD_LOCAL: 0,
+    RTLD_NEXT: 0xffffffff,
+    RTLD_DEFAULT: 0,
+    RTLD_DI_LINKMAP: 2,
+
+    // <dlfcn.h>
+    dlclose: NYI('dlclose'),
+    dlerror: NYI('dlerror'),
+    dlopen: NYI('dlopen'),
+    dlsym: NYI('dlsym'),
+    dladdr: NYI('dladdr'),
+    dlinfo: NYI('dlinfo'),
+
     // <fcntl.h> constants.
     F_DUPFD: 0,
     F_GETFD: 1,
