@@ -150,6 +150,14 @@ stacks. libc's `malloc` would then use this basic memory manager to implement
 runtime memory management, the same would be true for stack positioning, thread
 stacks, and thread-local storage allocation.
 
+Interesting applications can be built when modules *don't* share the same
+heap. They need to communicate through copy-in / copy-out functionality (such as
+Linux' `copy_from_user` / `copy_to_user` functions), and are then entirely
+isolated from each other except for their API boundary. This allows applications
+to instantiate their heap in a private closure and only expose APIs, providing
+good isolation properties and preventing user code from overflow and other
+security issues.
+
 ## Why do dynamic linking now?
 
 These basic experiments are finding bugs in the toolchain, if anything they're
