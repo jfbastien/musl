@@ -240,7 +240,9 @@ Execute it:
 
 Note that this currently doesn't work because the `dlsym` implementation returns
 the function from another module, and the implementation puts the functions in
-different tables. We could fix this by:
+different tables. `call_indirect` can only call functions from the same module,
+whereas `call_import` can call functions from another module by trampolining
+through JavaScript. We could fix this by:
 
 * Forcing developers to use a function such as `dlcall` and provide handles for
   the module and symbol. `dlcall` would trampoline through JavaScript. This
