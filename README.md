@@ -1,4 +1,4 @@
-# WebAssembly experiment for musl libc with dynamic linking
+# WebAssembly experiment for musl libc with limited dynamic linking
 
 A [musl experiment][].
 
