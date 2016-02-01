@@ -140,7 +140,8 @@ should be fixed.
 
 We'll also need to figure out how to make memory segments relocatable, and the
 AST references to the segments position independent. Do we even want to allow
-non-relocatable segments?
+non-relocatable segments? The current implementation overwrites previous
+segments if they specify the same memory location.
 
 It seems like user code should be managing all of the heap, the first module
 that's loaded (even before libc) could therefore be a basic memory manager. The
