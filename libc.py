@@ -31,6 +31,7 @@ SRC_DIRS = [
     'ctype', 'env', 'errno', 'exit', 'internal', 'ldso', 'malloc', 'math',
     'prng', 'regex', 'stdio', 'string', 'stdlib', 'unistd']
 BLACKLIST = [
+    'puts.c',  # The JS version is nicer for now.
     'strsignal.c', '__ctype_get_mb_cur_max.c',
     'printf.c', 'fprintf.c', 'fscanf.c', 'vfprintf.c', 'asprintf.c',
     'dprintf.c', 'scanf.c', 'sprintf.c', 'snprintf.c', 'sscanf.c',
