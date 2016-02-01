@@ -952,14 +952,17 @@ for (var i = arguments.length - 1; i > 0; --i) {
 }
 
 // Load the main module once the ffi object has been fully populated.
-modules[0] = load_wasm(arguments[0]);
+var main_module = arguments[0];
+modules[0] = load_wasm(main_module);
 
 // TODO check that `main` exists in modules[0] and error out if not.
 
 try {
-  modules[0].main();
+  var ret = modules[0].main();
   stdio.__flush_stdout();
-  print('Program terminated normally.');
+  print(main_module + '::main() returned ' + ret);
+  if (ret != stdlib.EXIT_SUCCESS)
+    throw new Error('main reported failure');
 } catch (e) {
   stdio.__flush_stdout();
   if (e instanceof TerminateWasmException) {
