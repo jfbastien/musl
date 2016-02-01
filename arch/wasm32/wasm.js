@@ -25,6 +25,17 @@ var HEAP_SIZE_BYTES = 1 << 20;
 var heap = new ArrayBuffer(HEAP_SIZE_BYTES);
 var heap_uint8 = new Uint8Array(heap);
 
+// Heap access helpers.
+function charFromHeap(ptr) { return String.fromCharCode(heap_uint8[ptr]); }
+function stringFromHeap(ptr) {
+  var str = '';
+  for (var i = ptr; heap_uint8[i] != 0; ++i)
+    str += charFromHeap(i);
+  return str;
+}
+
+// Exceptions.
+
 function TerminateWasmException(value) {
   this.value = value;
   this.message = 'Terminating WebAssembly';
@@ -319,11 +330,7 @@ var stdio = (function() {
       stdout_buf += String.fromCharCode(character);
       return character;
     },
-    puts: function(str) {
-      for (var i = 0; heap_uint8[str + i] != 0; ++i)
-        stdout_buf += String.fromCharCode(heap_uint8[str + i]);
-      stdout_buf += '\n';
-    },
+    puts: function(str) { stdout_buf += stringFromHeap(str) + '\n'; },
     ungetc: NYI('ungetc'),
 
     // Direct input/output.
@@ -539,6 +546,10 @@ var unix = (function() {
   var OPEN_MAX = 256;
   var open_files = new Uint8Array(OPEN_MAX);
 
+  var dlfcn = {};
+  var dlfcn_handle_to_filename = {};
+  var dlfcn_max_handle = 0;
+
   return {
     // <dlfcn.h> constants.
     RTLD_LAZY: 1,
@@ -552,10 +563,47 @@ var unix = (function() {
     RTLD_DI_LINKMAP: 2,
 
     // <dlfcn.h>
-    dlclose: NYI('dlclose'),
-    dlerror: NYI('dlerror'),
-    dlopen: NYI('dlopen'),
-    dlsym: NYI('dlsym'),
+    dlclose: function(handle) {
+      var filename = dlfcn_handle_to_filename[handle];
+      if (!filename) NYI('dlclose of invalid handle')();
+      dlfcn[filename].refcount -= 1;
+      if (dlfcn[filename].refcount == 0)
+        dlfcn[filename] = undefined;
+      return 0; },
+    dlerror: function() {
+      // TODO: implement error handling.
+      return 0; },
+    dlopen: function(filename, flags) {
+      if (!filename) NYI('dlopen(NULL, ...);')();
+      var fs = stringFromHeap(filename);
+      if (dlfcn[fs]) {
+        dlfcn[fs].refcount += 1;
+        return dlfcn[fs].handle;
+      }
+      if (flags & unix.RTLD_LAZY) NYI('dlopen with flag RTLD_LAZY')();
+      if (~flags & unix.RTLD_NOW) NYI('dlopen without flag RTDL_NOW')();
+      if (flags & unix.RTLD_NOLOAD) NYI('dlopen with flag RTLD_NOLOAD')();
+      if (flags & unix.RTLD_NODELETE) NYI('dlopen with flag RTLD_NODELETE')();
+      if (flags & unix.RTLD_GLOBAL) NYI('dlopen with flag RTLD_GLOBAL')();
+      // TODO: other flags.
+      var handle = ++dlfcn_max_handle;
+      dlfcn[fs] = {
+        refcount: 0,
+        module: load_wasm(fs),
+        handle: handle
+      };
+      dlfcn_handle_to_filename[handle] = fs;
+      return handle; },
+    dlsym: function(handle, symbol) {
+      var filename = dlfcn_handle_to_filename[handle];
+      if (!filename) NYI('dlsym of invalid handle')();
+      if (!symbol) NYI('dlsym of NULL symbol')();
+      var ss = stringFromHeap(symbol);
+      // TODO: error handling when module doesn't contain symbol.
+      for (var m in dlfcn[filename].module)
+        if (m == ss)
+          return m;
+      NYI('dlsym with symbol not found in handle')(); },
     dladdr: NYI('dladdr'),
     dlinfo: NYI('dlinfo'),
 

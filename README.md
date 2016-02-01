@@ -99,8 +99,9 @@ A WebAssembly module with un-met imports will throw. This can be handled, add
 the missing function as a stub to FFI, and then load again (loop until success)
 but it's silly. If WebAssembly modules were loadable, imports inspectable, and
 FFI object provided later then we'd be better off. We could implement very fancy
-lazy-loading, where the developer can handle load failures. We could also easily
-implement `dlopen` / `dlsym` / `dlclose`.
+lazy-loading, where the developer can handle load failures. We can easily
+implement `dlopen` / `dlsym` / `dlclose` as demonstrated by the `<dlfcn.h>`
+example below.
 
 It would also be good to be able to specify compilation / execution separately.
 
@@ -162,3 +163,79 @@ Developers are in control: they can do the equivalent of `-ffunction-sections`
 and `-fdata-sections` but emit one `.wasm` file per section. This allows them to
 lazy-load and lazy-compile each function as needed, and even unload them when
 the program doesn't need them anymore.
+
+
+## `<dlfcn.h>` example
+
+This example doesn't use `musl.wasm`, it currently only uses `wasm.js`. musl
+could be used for this, it would be much cleaner (e.g. `dlerror` could work and
+return `const char *` as it should), but it requires hooking up syscalls
+properly.
+
+Create `dlhello.c`:
+
+```
+  #include <dlfcn.h>
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main() {
+    typedef void (*world_type)();
+
+    void *handle = dlopen("dlworld.wasm", RTLD_NOW);
+    if (!handle) {
+      puts("dlopen failed:");
+      puts(dlerror());
+      abort();
+    }
+
+    dlerror();
+    world_type world = (world_type)dlsym(handle, "world");
+    const char *err = dlerror();
+    if (err) {
+      puts("dlsym failed:");
+      puts(err);
+      abort();
+    }
+
+    world();
+
+    dlclose(handle);
+    return 0;
+  }
+```
+
+And `dlworld.c`:
+
+```
+  #include <stdio.h>
+  void world() { puts("World!"); }
+```
+
+Compile the programs:
+
+```
+  clang -S -O2 --target=wasm32-unknown-unknown ./dlhello.c
+  clang -S -O2 --target=wasm32-unknown-unknown ./dlworld.c
+  s2wasm dlhello.s -o dlhello.wast
+  s2wasm dlworld.s -o dlworld.wast
+  sexpr-wasm dlhello.wast -o dlhello.wasm
+  sexpr-wasm dlworld.wast -o dlworld.wasm
+```
+
+Execute it:
+
+```
+  d8 --expose-wasm musl/arch/wasm32/wasm.js -- dlhello.wasm
+```
+
+Note that this currently doesn't work because the `dlsym` implementation returns
+the function from another module, and the implementation puts the functions in
+different tables. We could fix this by:
+
+* Forcing developers to use a function such as `dlcall` and provide handles for
+  the module and symbol.
+* Map functions from all module into the same table.
+* Map functions from other modules into the current one when `dlsym` is invoked,
+  e.g. adding new functions to the `_WASMEXP_` instance. This also requires
+  tracking `dlclose` properly.
