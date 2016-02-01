@@ -602,7 +602,7 @@ var unix = (function() {
       // TODO: error handling when module doesn't contain symbol.
       for (var m in dlfcn[filename].module)
         if (m == ss)
-          return m;
+          return dlfcn[filename].module[m];
       NYI('dlsym with symbol not found in handle')(); },
     dladdr: NYI('dladdr'),
     dlinfo: NYI('dlinfo'),
