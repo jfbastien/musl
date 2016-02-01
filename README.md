@@ -4,20 +4,25 @@ A [musl experiment][].
 
   [musl experiment]: https://github.com/WebAssembly/musl/blob/landing-branch/README.md
 
-The goal of this prototype was to get a WebAssembly libc off the ground. Dynamic
-linking came out of it *for free* which is mighty convenient. We should:
+The goal of this prototype was to get a WebAssembly libc off the ground. Limited
+dynamic linking (no cross-module function pointers) came out of it *for free*
+which is mighty convenient. We should:
 
-1. Focus on the libc aspect.
-2. As a secondary goal use dynamic linking to inform WebAssembly's design.
+1. Focus on the libc aspect, with static linking.
+2. As a secondary goal use limited dynamic linking to inform WebAssembly's
+   design.
 
-**Note:** This experimental WebAssembly C library with dynamic linking is a
-hack. Don't rely on it: it's meant to inform the design of WebAssembly. Things
-are changing rapidly, so mixing different parts of the toolchain may break from
-time to time, try to keep them all in sync.
+**Note:** This experimental WebAssembly C library with limited dynamic linking
+is a hack. Don't rely on it: it's meant to inform the design of
+WebAssembly. Things are changing rapidly, so mixing different parts of the
+toolchain may break from time to time, try to keep them all in sync. In
+particular, the current WebAssembly design doesn't allow sharing heaps between
+modules. It's a convenience API in the V8 implementation which may be removed in
+the future.
 
-In this experiment dynamic linking is entirely done through JavaScript, which is
-acting as the dynamic linker / loader. This merely uses the WebAssembly object's
-capabilities.
+In this experiment, limited dynamic linking is entirely done through JavaScript,
+which is acting as the dynamic linker / loader. This merely uses the WebAssembly
+object's capabilities as implemented today.
 
 ## Quick how-to
 
@@ -95,6 +100,8 @@ Calls from one WebAssembly module to another trampoline through JavaScript, but
 they should optimize well. We should figure out what we suggest developers use,
 so that the default pattern doesn't require gymnastics on the compiler's part.
 
+Indirect calls from one WebAssembly module to another do not work.
+
 A WebAssembly module with un-met imports will throw. This can be handled, add
 the missing function as a stub to FFI, and then load again (loop until success)
 but it's silly. If WebAssembly modules were loadable, imports inspectable, and
@@ -129,8 +136,9 @@ repository may not be the right one.
 
 ## Miscellaneous
 
-Dynamic linking isn't in WebAssembly's current MVP because we thought it would
-be hard. This repository shows that it's *possible*, we therefore may as well
+Dynamic linking and pointer-less dynamic linking aren't in WebAssembly's current
+MVP because we thought it would be hard. This repository shows that it's
+*possible* to expose limited but useful functionality, we therefore may as well
 design it right from the start, or make it entirely impossible for the MVP.
 
 That'll including figuring out calling convention and ABI. Exports currently
@@ -172,7 +180,6 @@ Developers are in control: they can do the equivalent of `-ffunction-sections`
 and `-fdata-sections` but emit one `.wasm` file per section. This allows them to
 lazy-load and lazy-compile each function as needed, and even unload them when
 the program doesn't need them anymore.
-
 
 ## `<dlfcn.h>` example
 
@@ -240,9 +247,10 @@ Execute it:
 
 Note that this currently doesn't work because the `dlsym` implementation returns
 the function from another module, and the implementation puts the functions in
-different tables. `call_indirect` can only call functions from the same module,
-whereas `call_import` can call functions from another module by trampolining
-through JavaScript. We could fix this by:
+different tables (hence the "limited" nature of this hacky dynamic
+linking). `call_indirect` can only call functions from the same module, whereas
+`call_import` can call functions from another module by trampolining through
+JavaScript. We could fix this by:
 
 * Forcing developers to use a function such as `dlcall` and provide handles for
   the module and symbol. `dlcall` would trampoline through JavaScript. This
@@ -252,3 +260,6 @@ through JavaScript. We could fix this by:
 * Map functions from other modules into the current one when `dlsym` is invoked,
   e.g. adding new functions to the `_WASMEXP_` instance. This also requires
   tracking `dlclose` properly.
+
+This amounts to designing full dynamic linking correctly, which we may not want
+to do for MVP.
