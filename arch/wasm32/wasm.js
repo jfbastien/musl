@@ -944,7 +944,7 @@ for (var i = arguments.length - 1; i > 0; --i) {
   modules[i] = load_wasm(path);
   for (var f in modules[i]) {
     // TODO wasm modules don't have hasOwnProperty. They probably should.
-    //      The code shoudl look like:
+    //      The code should look like:
     //      if (modules[i].hasOwnProperty(f) &&
     //          modules[i][f] instanceof Function)
     ffi[f] = modules[i][f];
