@@ -4,7 +4,7 @@ A [musl experiment][].
 
   [musl experiment]: https://github.com/WebAssembly/musl/blob/landing-branch/README.md
 
-The goal of this prototype was to get a WebAssembly libc off the ground. Limited
+The goal of this prototype was to get another WebAssembly libc off the ground. Limited
 dynamic linking (no cross-module function pointers) came out of it *for free*
 which is mighty convenient. We should:
 
@@ -140,6 +140,10 @@ Dynamic linking and pointer-less dynamic linking aren't in WebAssembly's current
 MVP because we thought it would be hard. This repository shows that it's
 *possible* to expose limited but useful functionality, we therefore may as well
 design it right from the start, or make it entirely impossible for the MVP.
+
+This is in addition to Emscripten's musl port, in which we also have working
+dynamic linking, dlopen(), and so forth, also through calling out to JS
+from different modules.
 
 That'll including figuring out calling convention and ABI. Exports currently
 don't declare their signature in a WebAssembly module, even though they are in
