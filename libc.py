@@ -81,6 +81,10 @@ def check_output(cmd, **kwargs):
   return subprocess.check_output(cmd, cwd=cwd)
 
 
+def change_extension(path, new_extension):
+  return path[:path.rfind('.')] + new_extension
+
+
 def create_version(musl):
   """musl's Makefile creates version.h"""
   script = os.path.join(musl, 'tools', 'version.sh')
@@ -154,20 +158,22 @@ class Compiler(object):
       pool.join()
 
   def link_assemble(self):
+    bytecode = change_extension(self.out, '.bc')
+    assembly = os.path.join(self.tmpdir, self.outbase + '.s')
     check_output([os.path.join(self.clang_dir, 'llvm-link'),
-                  '-o', self.outbase + '.llvm-link'] + self.compiled,
+                  '-o', bytecode] + self.compiled,
                  cwd=self.tmpdir)
     check_output([os.path.join(self.clang_dir, 'llc'),
-                  self.outbase + '.llvm-link', '-o', self.outbase + '.llc'],
+                  bytecode, '-o', assembly],
                  cwd=self.tmpdir)
     check_output([os.path.join(self.binaryen_dir, 's2wasm'),
-                  self.outbase + '.llc', '--ignore-unknown', '-o', self.out],
+                  assembly, '--ignore-unknown', '-o', self.out],
                  cwd=self.tmpdir)
 
   def binary(self):
     if self.sexpr_wasm:
       check_output([self.sexpr_wasm,
-                    self.out, '-o', self.out[:self.out.rfind('.')] + '.wasm'],
+                    self.out, '-o', change_extension(self.out, '.wasm')],
                    cwd=self.tmpdir)
 
 
