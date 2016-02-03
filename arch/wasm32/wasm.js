@@ -87,8 +87,9 @@ var ctype = (function() {
     isprint: function(c) { return !ctype.iscntrl(c); },
     ispunct: function(c) { return ctype.isgraph(c) && !ctype.isalnum(c); },
     isspace: function(c) {
-      for (var s in [0x20, 0x09, 0x0a, 0x0b, 0x0c, 0x0d])
-        if ((c & 0xff) == s) return 1;
+      var spaces = [0x20, 0x09, 0x0a, 0x0b, 0x0c, 0x0d];
+      for (var s in spaces)
+        if ((c & 0xff) == spaces[s]) return 1;
       return 0;
     },
     isupper: function(c) { return between(c, 'A', 'Z'); },
@@ -974,7 +975,22 @@ try {
     print(e);
     throw e;
   } else {
-    print('Unknown exception: ' + e);
+    function is_runtime_trap(e) {
+      if ('string' != typeof e) return false;
+      var traps = ['unreachable',
+                   'memory access out of bounds',
+                   'divide by zero',
+                   'divide result unrepresentable',
+                   'remainder by zero',
+                   'integer result unrepresentable',
+                   'invalid function',
+                   'function signature mismatch'];
+      for (var msg in traps) if (e == traps[msg]) return true;
+      return false;
+    }
+    print(is_runtime_trap(e) ?
+        ('Runtime trap: ' + e) :
+        ('Unknown exception of type `' + typeof(e) + '`: ' + e));
     throw e;
   }
 }
