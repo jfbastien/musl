@@ -668,7 +668,7 @@ var unix = (function() {
 
     // <signal.h>
     // TODO other <signal.h> functions.
-    signal: function signal(signum, handler) { return SIG_ERR; },
+    signal: function signal(signum, handler) { return unix.SIG_ERR; },
 
     // <sys.mman.h> constants.
     PROT_READ: 1,
