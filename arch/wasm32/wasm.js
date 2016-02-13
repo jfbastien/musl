@@ -240,7 +240,8 @@ var math = (function() {
     __builtin_isinfl: function(x) { return math.isinf(x); },
     __builtin_isnan: Number.isNaN,
     __builtin_isnanf: Number.isNaN,
-    __builtin_isnanl: Number.isNaN
+    __builtin_isnanl: Number.isNaN,
+    __builtin_clrsb: NYI('__builtin_clrsb')
   };
 })();
 
