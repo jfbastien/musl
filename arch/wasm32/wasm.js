@@ -241,7 +241,9 @@ var math = (function() {
     __builtin_isnan: Number.isNaN,
     __builtin_isnanf: Number.isNaN,
     __builtin_isnanl: Number.isNaN,
-    __builtin_clrsb: NYI('__builtin_clrsb')
+    __builtin_clrsb: NYI('__builtin_clrsb'),
+    __builtin_clrsbl: NYI('__builtin_clrsbl'),
+    __builtin_clrsbll: NYI('__builtin_clrsbll')
   };
 })();
 
