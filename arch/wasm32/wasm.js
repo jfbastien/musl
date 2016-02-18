@@ -21,7 +21,7 @@
  * both as a hobbling libc and a linker/loader, including dynamic linking.
  */
 
-var HEAP_SIZE_BYTES = 1 << 20;
+var HEAP_SIZE_BYTES = 1 << 24;
 var heap = new ArrayBuffer(HEAP_SIZE_BYTES);
 var heap_uint8 = new Uint8Array(heap);
 
