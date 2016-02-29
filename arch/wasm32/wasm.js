@@ -959,10 +959,10 @@ for (var i = arguments.length - 1; i > 0; --i) {
 var main_module = arguments[0];
 modules[0] = load_wasm(main_module);
 
-// TODO check that `main` exists in modules[0] and error out if not.
+// TODO check that `main` exists in modules[0].exports and error out if not.
 
 try {
-  var ret = modules[0].main();
+  var ret = modules[0].exports.main();
   stdio.__flush_stdout();
   print(main_module + '::main() returned ' + ret);
   if (ret != stdlib.EXIT_SUCCESS)
