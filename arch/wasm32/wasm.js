@@ -914,7 +914,7 @@ var syscall = (function() {
 
 // Start with the stub implementations. Further module loads may shadow them.
 var ffi = (function() {
-  var functions = {};
+  var functions = {env:{}};
   var libraries = [
     musl_hack, // Keep first, overriden later.
     builtins, ctype, math, runtime, stdio, stdlib, string, unix,
@@ -923,7 +923,7 @@ var ffi = (function() {
   for (var l in libraries)
     for (var f in libraries[l])
       if (libraries[l].hasOwnProperty(f) && libraries[l][f] instanceof Function)
-        functions[f] = libraries[l][f];
+        functions["env"][f] = libraries[l][f];
   return functions;
 })();
 
@@ -935,7 +935,7 @@ function load_wasm(file_path) {
   // dependencies. That would make it easier to do lazy loading. We could do
   // this by catching load exceptions + adding to ffi and trying again, but
   // we're talking silly there: modules should just tell us what they want.
-  return _WASMEXP_.instantiateModule(readbuffer(file_path), ffi, heap);
+  return Wasm.instantiateModule(readbuffer(file_path), ffi, heap);
 }
 
 // Load modules in reverse, adding their exports to the ffi object.
