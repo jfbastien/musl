@@ -864,6 +864,8 @@ var musl_hack = (function() {
     __set_thread_area: NYI('__set_thread_area'),
     snprintf: NYI('snprintf'),
     sprintf: NYI('sprintf'),
+    __stdio_write: NYI('__stdio_write'),
+    __stdout_write: NYI('__stdout_write'),
     __synccall: NYI('__synccall'),
     towlower: NYI('towlower'),
     towupper: NYI('towupper'),
