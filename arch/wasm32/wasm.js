@@ -21,9 +21,9 @@
  * both as a hobbling libc and a linker/loader, including dynamic linking.
  */
 
-var HEAP_SIZE_BYTES = 1 << 24;
-var heap = new ArrayBuffer(HEAP_SIZE_BYTES);
-var heap_uint8 = new Uint8Array(heap);
+var heap_size_bytes;
+var heap;
+var heap_uint8;
 
 // Heap access helpers.
 function charFromHeap(ptr) { return String.fromCharCode(heap_uint8[ptr]); }
@@ -398,7 +398,7 @@ var stdlib = (function() {
     free: NYI('free'),
     malloc: function(size) {
       if (size == 0) return 0;
-      if (allocated_bytes > HEAP_SIZE_BYTES) return 0;
+      if (allocated_bytes > heap_size_bytes) return 0;
       allocated_bytes += size;
       return allocated_bytes - size;
     },
@@ -937,7 +937,11 @@ function load_wasm(file_path) {
   // dependencies. That would make it easier to do lazy loading. We could do
   // this by catching load exceptions + adding to ffi and trying again, but
   // we're talking silly there: modules should just tell us what they want.
-  return Wasm.instantiateModule(readbuffer(file_path), ffi, heap);
+  instance = new WebAssembly.Instance(new WebAssembly.Module(readbuffer(file_path)), ffi)
+  heap = instance.exports.memory.buffer;
+  heap_uint8 = new Uint8Array(heap);
+  heap_size_bytes = heap.byteLength;
+  return instance;
 }
 
 // Load modules in reverse, adding their exports to the ffi object.
