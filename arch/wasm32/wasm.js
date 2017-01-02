@@ -937,7 +937,10 @@ function load_wasm(file_path) {
   // dependencies. That would make it easier to do lazy loading. We could do
   // this by catching load exceptions + adding to ffi and trying again, but
   // we're talking silly there: modules should just tell us what they want.
-  instance = new WebAssembly.Instance(new WebAssembly.Module(readbuffer(file_path)), ffi)
+  const buf = (typeof readbuffer === 'function')
+    ? new Uint8Array(readbuffer(file_path))
+    : read(file_path, 'binary');
+  instance = new WebAssembly.Instance(new WebAssembly.Module(buf), ffi)
   heap = instance.exports.memory.buffer;
   heap_uint8 = new Uint8Array(heap);
   heap_size_bytes = heap.byteLength;
