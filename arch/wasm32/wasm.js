@@ -934,7 +934,7 @@ if (arguments.length < 1)
 
 if (arguments[0] == '--dump-ffi-symbols') {
   for (var name in ffi["env"])
-    console.log(name)
+    print(name)
 } else {
   function load_wasm(file_path) {
     // TODO this should be split up in load, check dependencies, and then resolve
