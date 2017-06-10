@@ -14,6 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import argparse
 import glob
 import itertools
 import multiprocessing
@@ -126,27 +127,14 @@ def includes(musl, arch):
 
 class Compiler(object):
   """Compile source files."""
-
-  def __init__(self, out, clang_dir, binaryen_dir, sexpr_wasm, musl, arch,
-               tmpdir):
+  def __init__(self, out, clang_dir, musl, arch, tmpdir):
     self.out = out
     self.outbase = os.path.basename(self.out)
     self.clang_dir = clang_dir
-    self.binaryen_dir = binaryen_dir
-    self.sexpr_wasm = sexpr_wasm
     self.musl = musl
     self.arch = arch
     self.tmpdir = tmpdir
     self.compiled = []
-
-  def __call__(self, src):
-    target = '--target=wasm32-unknown-unknown'
-    compile_cmd = [os.path.join(self.clang_dir, 'clang'), target,
-                   '-Os', '-emit-llvm', '-S', '-nostdinc']
-    compile_cmd += includes(self.musl, self.arch)
-    compile_cmd += WARNINGS
-    check_output(compile_cmd + [src], cwd=self.tmpdir)
-    return os.path.basename(src)[:-1] + 'll'  # .c -> .ll
 
   def compile(self, sources):
     if verbose:
@@ -157,7 +145,42 @@ class Compiler(object):
       pool.close()
       pool.join()
 
-  def link_assemble(self):
+
+class ObjCompiler(Compiler):
+  def __init__(self, out, clang_dir, musl, arch, tmpdir):
+    super(ObjCompiler, self).__init__(out, clang_dir, musl, arch, tmpdir)
+
+  def __call__(self, src):
+    target = 'wasm32-unknown-unknown-wasm'
+    compile_cmd = [os.path.join(self.clang_dir, 'clang'), '-target', target,
+                   '-Os', '-c', '-nostdinc']
+    compile_cmd += includes(self.musl, self.arch)
+    compile_cmd += WARNINGS
+    check_output(compile_cmd + [src], cwd=self.tmpdir)
+    return os.path.basename(src)[:-1] + 'o'  # .c -> .o
+
+  def binary(self):
+    check_output([os.path.join(self.clang_dir, 'llvm-ar'), 'rcs', self.out] + self.compiled,
+                  cwd=self.tmpdir)
+
+
+class AsmCompiler(Compiler):
+  def __init__(self, out, clang_dir, musl, arch, tmpdir, binaryen_dir,
+      sexpr_wasm):
+    super(AsmCompiler, self).__init__(out, clang_dir, musl, arch, tmpdir)
+    self.binaryen_dir = binaryen_dir
+    self.sexpr_wasm = sexpr_wasm
+
+  def __call__(self, src):
+    target = 'wasm32-unknown-unknown'
+    compile_cmd = [os.path.join(self.clang_dir, 'clang'), '-target', target,
+                   '-Os', '-emit-llvm', '-S', '-nostdinc']
+    compile_cmd += includes(self.musl, self.arch)
+    compile_cmd += WARNINGS
+    check_output(compile_cmd + [src], cwd=self.tmpdir)
+    return os.path.basename(src)[:-1] + 'll'  # .c -> .ll
+
+  def binary(self):
     bytecode = change_extension(self.out, '.bc')
     assembly = os.path.join(self.tmpdir, self.outbase + '.s')
     check_output([os.path.join(self.clang_dir, 'llvm-link'),
@@ -170,14 +193,14 @@ class Compiler(object):
                   assembly, '--ignore-unknown', '-o', self.out],
                  cwd=self.tmpdir)
 
-  def binary(self):
     if self.sexpr_wasm:
       check_output([self.sexpr_wasm,
                     self.out, '-o', change_extension(self.out, '.wasm')],
                    cwd=self.tmpdir)
 
 
-def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps):
+def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps,
+    compile_to_wasm):
   if save_temps:
     tmpdir = os.path.join(os.getcwd(), 'libc_build')
     if os.path.isdir(tmpdir):
@@ -190,10 +213,12 @@ def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps):
     create_version(musl)
     build_alltypes(musl, arch)
     sources = musl_sources(musl)
-    compiler = Compiler(out, clang_dir, binaryen_dir, sexpr_wasm, musl, arch,
-                        tmpdir)
+    if compile_to_wasm:
+      compiler = ObjCompiler(out, clang_dir, musl, arch, tmpdir)
+    else:
+      compiler = AsmCompiler(out, clang_dir, musl, arch, tmpdir, binaryen_dir,
+                             sexpr_wasm)
     compiler.compile(sources)
-    compiler.link_assemble()
     compiler.binary()
   finally:
     if not save_temps:
@@ -201,7 +226,6 @@ def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps):
 
 
 def getargs():
-  import argparse
   parser = argparse.ArgumentParser(description='Build a hacky wasm libc.')
   parser.add_argument('--clang_dir', type=str, required=True,
                       help='Clang binary directory')
@@ -220,12 +244,20 @@ def getargs():
                       help='Save temporary files')
   parser.add_argument('--verbose', default=False, action='store_true',
                       help='Verbose')
+  parser.add_argument('--compile-to-wasm', default=False, action='store_true',
+                      help='Use clang to compile directly to wasm')
   return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main():
+  global verbose
   args = getargs()
   if args.verbose:
     verbose = True
-  sys.exit(run(args.clang_dir, args.binaryen_dir, args.sexpr_wasm,
-               args.musl, args.arch, args.out, args.save_temps))
+  return run(args.clang_dir, args.binaryen_dir, args.sexpr_wasm,
+             args.musl, args.arch, args.out, args.save_temps,
+             args.compile_to_wasm)
+
+
+if __name__ == '__main__':
+  sys.exit(main())
