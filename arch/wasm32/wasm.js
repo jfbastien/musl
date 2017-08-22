@@ -492,20 +492,22 @@ var string = (function() {
       return 0;
     },
     strcmp: function(str1, str2) {
-      for (var i = 0;; ++i)
-        if (heap_uint8[str1 + i] != heap_uint8[str2 + i])
-          return heap_uint8[str1 + i] < heap_uint8[str2 + i];
-        else if (heap_uint8[str1 + i] == 0)
-          break;
-      return 0;
+      for (var i1 = 0, i2 = 0; heap_uint8[str1 + i1] == heap_uint8[str2 + i2];
+           ++i1, ++i2) {
+        if (heap_uint8[str1 + i1] == 0)
+          return 0;
+      }
+      return heap_uint8[str1 + i1] < heap_uint8[str2 + i2] ? -1 : 1;
     },
     strcoll: NYI('strcoll'),
     strncmp: function(str1, str2, num) {
-      for (var i = 0; i != num; ++i)
-        if (heap_uint8[str1 + i] != heap_uint8[str2 + i])
-          return heap_uint8[str1 + i] < heap_uint8[str2 + i];
-        else if (heap_uint8[str1 + i] == 0)
-          break;
+      for (var i1 = 0, i2 = 0; num > 0; ++i1, ++i2, --num) {
+        var s1 = heap_uint8[str1 + i1], s2 = heap_uint8[str2 + i2];
+        if (s1 != s2)
+          return s1 < s2 ? -1 : 1;
+        else if (s1 == 0)
+          return 0;
+      }
       return 0;
     },
     strxfrm: NYI('strxfrm'),
@@ -517,8 +519,8 @@ var string = (function() {
       var i = 0;
       for (; heap_uint8[str + i] != 0; ++i)
         if (heap_uint8[str + i] == character)
-          return i;
-      return heap_uint8[str + i] == 0 ? i : 0;
+          return str + i;
+      return heap_uint8[str + i] == 0 ? str + i : 0;
     },
     strcspn: NYI('strcspn'),
     strpbrk: NYI('strpbrk'),
