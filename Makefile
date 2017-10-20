@@ -67,11 +67,11 @@ else
 CRT_LIBS = lib/crt1.o lib/Scrt1.o lib/rcrt1.o lib/crti.o lib/crtn.o
 endif
 STATIC_LIBS = lib/libc.a
-SHARED_LIBS = lib/libc.so
 TOOL_LIBS = lib/musl-gcc.specs
 ifeq ($(ARCH),wasm32)
 ALL_LIBS = $(CRT_LIBS) $(STATIC_LIBS) $(EMPTY_LIBS) $(TOOL_LIBS)
 else
+SHARED_LIBS = lib/libc.so
 ALL_LIBS = $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS) $(EMPTY_LIBS) $(TOOL_LIBS)
 endif
 ALL_TOOLS = obj/musl-gcc
