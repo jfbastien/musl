@@ -697,4 +697,7 @@
 #define SYS_process_vm_writev	348
 #define SYS_kcmp		349
 #define SYS_finit_module	350
+#define SYS_recvmmsg		357
+#define SYS_fanotify_init	367
+#define SYS_fanotify_mark	368
 #define SYS_membarrier		375

@@ -53,25 +53,33 @@ ARCH_INCLUDES = $(wildcard $(srcdir)/arch/$(ARCH)/bits/*.h)
 INCLUDES = $(wildcard $(srcdir)/include/*.h $(srcdir)/include/*/*.h)
 ALL_INCLUDES = $(sort $(INCLUDES:$(srcdir)/%=%) $(GENH:obj/%=%) $(ARCH_INCLUDES:$(srcdir)/arch/$(ARCH)/%=include/%))
 
+-include config.mak
+
+ifeq ($(ARCH),)
+$(error Please set ARCH in config.mak before running make.)
+endif
+
 EMPTY_LIB_NAMES = m rt pthread crypt util xnet resolv dl
 EMPTY_LIBS = $(EMPTY_LIB_NAMES:%=lib/lib%.a)
+ifeq ($(ARCH),wasm32)
+CRT_LIBS = lib/crt1.o lib/Scrt1.o lib/rcrt1.o
+else
 CRT_LIBS = lib/crt1.o lib/Scrt1.o lib/rcrt1.o lib/crti.o lib/crtn.o
+endif
 STATIC_LIBS = lib/libc.a
 SHARED_LIBS = lib/libc.so
 TOOL_LIBS = lib/musl-gcc.specs
+ifeq ($(ARCH),wasm32)
+ALL_LIBS = $(CRT_LIBS) $(STATIC_LIBS) $(EMPTY_LIBS) $(TOOL_LIBS)
+else
 ALL_LIBS = $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS) $(EMPTY_LIBS) $(TOOL_LIBS)
+endif
 ALL_TOOLS = obj/musl-gcc
 
 WRAPCC_GCC = gcc
 WRAPCC_CLANG = clang
 
 LDSO_PATHNAME = $(syslibdir)/ld-musl-$(ARCH)$(SUBARCH).so.1
-
--include config.mak
-
-ifeq ($(ARCH),)
-$(error Please set ARCH in config.mak before running make.)
-endif
 
 all: $(ALL_LIBS) $(ALL_TOOLS)
 

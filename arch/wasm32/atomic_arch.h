@@ -1,6 +1,8 @@
 #ifndef __NR_restart_syscall
-#include <bits/syscall.h>
+#include <syscall.h>
 #endif
+
+#include <stdlib.h>
 
 #define a_barrier() syscall(__NR_membarrier)
 
