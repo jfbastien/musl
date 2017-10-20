@@ -265,6 +265,7 @@ var runtime = (function() {
     __floatunsitf: NYI('__floatunsitf'),
     __getf2: NYI('__getf2'),
     __gttf2: NYI('__gttf2'),
+    __letf2: NYI('__letf2'),
     __lttf2: NYI('__lttf2'),
     __multf3: NYI('__multf3'),
     __multi3: NYI('__multi3'),
