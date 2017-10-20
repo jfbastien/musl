@@ -309,6 +309,7 @@ mips*) ARCH=mips ;;
 microblaze*) ARCH=microblaze ;;
 or1k*) ARCH=or1k ;;
 powerpc*) ARCH=powerpc ;;
+wasm*) ARCH=wasm32 ;;
 sh[1-9bel-]*|sh|superh*) ARCH=sh ;;
 unknown) fail "$0: unable to detect target arch; try $0 --target=..." ;;
 *) fail "$0: unknown or unsupported target \"$target\"" ;;
