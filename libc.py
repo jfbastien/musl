@@ -32,8 +32,11 @@ BLACKLIST = [
     'puts.c', # Prefer the JS version for now
     'abort.c', # Perfer the JS version for now
     '_Exit.c', # Perfer the JS version for now
-    'exit.c', # Contains a weak reference which is not suppoered by s2wasm
-    '__libc_start_main.c', # Contains a weak reference which is not suppoered by s2wasm
+]
+# Files that contain weak reference which are not suppoered by s2wasm
+WEAK_BLACKLIST = [
+    'exit.c',
+    '__libc_start_main.c',
 ]
 CFLAGS = ['-std=c99',
           '-D_XOPEN_SOURCE=700',
@@ -84,7 +87,7 @@ def build_alltypes(musl, arch):
     o.write(out)
 
 
-def musl_sources(musl_root):
+def musl_sources(musl_root, include_weak):
   """musl sources to be built."""
   sources = []
   for d in os.listdir(os.path.join(musl_root, 'src')):
@@ -94,6 +97,8 @@ def musl_sources(musl_root):
     pattern = os.path.join(base, '*.c')
     for f in glob.glob(pattern):
       if os.path.basename(f) in BLACKLIST:
+        continue
+      if not include_weak and os.path.basename(f) in WEAK_BLACKLIST:
         continue
       sources.append(f)
   return sorted(sources)
@@ -197,7 +202,7 @@ def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps,
   try:
     create_version(musl)
     build_alltypes(musl, arch)
-    sources = musl_sources(musl)
+    sources = musl_sources(musl, include_weak=compile_to_wasm)
     if compile_to_wasm:
       compiler = ObjCompiler(out, clang_dir, musl, arch, tmpdir)
     else:
