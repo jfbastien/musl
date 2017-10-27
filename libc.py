@@ -160,6 +160,8 @@ class ObjCompiler(Compiler):
     return os.path.basename(src)[:-1] + 'o'  # .c -> .o
 
   def binary(self):
+    if os.path.exists(self.out):
+      os.remove(self.out)
     check_output([os.path.join(self.clang_dir, 'llvm-ar'), 'rcs', self.out] + self.compiled,
                   cwd=self.tmpdir)
 
