@@ -31,6 +31,3 @@ long __syscall3(long n, long a, long b, long c);
 long __syscall4(long n, long a, long b, long c, long d);
 long __syscall5(long n, long a, long b, long c, long d, long e);
 long __syscall6(long n, long a, long b, long c, long d, long e, long f);
-
-// HACK other architectures don't do this.
-#include "../../src/internal/syscall.h"

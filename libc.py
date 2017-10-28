@@ -27,51 +27,31 @@ import tempfile
 
 verbose = False
 
-# TODO add 'time'.
-SRC_DIRS = [
-    'ctype', 'env', 'errno', 'exit', 'internal', 'ldso', 'malloc', 'math',
-    'prng', 'regex', 'stdio', 'string', 'stdlib', 'unistd']
+DIR_BLACKLIST = ['misc', 'thread']
 BLACKLIST = [
-    'puts.c',  # The JS version is nicer for now.
-    'strsignal.c', '__ctype_get_mb_cur_max.c',
-    'printf.c', 'fprintf.c', 'fscanf.c', 'vfprintf.c', 'asprintf.c',
-    'dprintf.c', 'scanf.c', 'sprintf.c', 'snprintf.c', 'sscanf.c',
-    'vfscanf.c', 'vsnprintf.c',
-    'qsort.c', 'regexec.c', 'regcomp.c', 'strftime.c', 'strptime.c',
-    'faccessat.c', 'floatscan.c', 'getcwd.c', 'glob.c', 'pclose.c',
-    '__tz.c', 'pwrite.c', 'pread.c', '__fdopen.c', '__fopen_rb_ca.c',
-    '__rem_pio2_large.c', '__stdio_write.c',
-    '__stdout_write.c', 'vdprintf.c',
-    '__year_to_secs.c', 'tcgetpgrp.c', 'tcsetpgrp.c', 'timer_create.c',
-    'tmpfile.c', 'utime.c', 'wcsftime.c',
-    'dlerror.c', 'exit.c', 'abort.c', '_Exit.c', '__libc_start_main.c',
-    # Wide characters.
-    'fgetwc.c', 'getw.c', 'vfwprintf.c',
-    'fgetws.c', 'getwc.c', 'vfwscanf.c',
-    'fputwc.c', 'getwchar.c', 'vswprintf.c',
-    'fputws.c', 'swprintf.c', 'vswscanf.c',
-    'swscanf.c', 'vwprintf.c',
-    'fwprintf.c', 'putw.c', 'vwscanf.c', 'fwscanf.c',
-    'putwc.c', 'wprintf.c', 'open_wmemstream.c',
-    'fwscanf.c', 'putwchar.c', 'ungetwc.c', 'wscanf.c', 'fwide.c',
-    'iswctype.c', 'iswupper.c', 'towctrans.c', 'wctrans.c', 'iswgraph.c',
-    'iswblank.c', 'iswpunct.c', 'wcwidth.c', 'iswspace.c', 'iswxdigit.c',
-    'wcswidth.c', 'iswcntrl.c', 'iswalnum.c', 'iswalpha.c', 'iswlower.c',
-    'iswprint.c', 'iswdigit.c', 'wcsdup.c', 'wcsncmp.c', 'wcscpy.c',
-    'wcstok.c', 'wcpncpy.c', 'wcsrchr.c', 'wmemchr.c', 'wcsspn.c',
-    'wmemcpy.c', 'wcscspn.c', 'wcscasecmp_l.c', 'wcsncat.c', 'wcsncasecmp_l.c',
-    'wmemmove.c', 'wcscasecmp.c', 'wcspbrk.c', 'wcschr.c', 'wmemcmp.c',
-    'wcpcpy.c', 'wcsnlen.c', 'wcsstr.c', 'wmemset.c', 'wcscmp.c', 'wcsncpy.c',
-    'wcswcs.c', 'wcscat.c', 'wcslen.c', 'wcsncasecmp.c',
-    # stdio file lock.
-    'flockfile.c', 'ftrylockfile.c', 'funlockfile.c', '__lockfile.c'
+    'puts.c', # Prefer the JS version for now
+    'abort.c', # Perfer the JS version for now
+    '_Exit.c', # Perfer the JS version for now
+    'exit.c', # Contains a weak reference which is not suppoered by s2wasm
+    '__libc_start_main.c', # Contains a weak reference which is not suppoered by s2wasm
 ]
-WARNINGS = ['-Wno-incompatible-library-redeclaration',
-            '-Wno-shift-op-parentheses',
-            '-Wno-ignored-attributes',
-            '-Wno-bitwise-op-parentheses',
-            '-Wno-pointer-sign',
-            '-Wno-unknown-pragmas']
+CFLAGS = ['-std=c99',
+          '-D_XOPEN_SOURCE=700',
+          '-Werror',
+          '-Wno-incompatible-library-redeclaration',
+          '-Wno-shift-op-parentheses',
+          '-Wno-tautological-unsigned-zero-compare',
+          '-Wno-tautological-constant-out-of-range-compare',
+          '-Wno-tautological-unsigned-enum-zero-compare',
+          '-Wno-ignored-attributes',
+          '-Wno-format',
+          '-Wno-bitwise-op-parentheses',
+          '-Wno-logical-op-parentheses',
+          '-Wno-string-plus-int',
+          '-Wno-pointer-sign',
+          '-Wno-dangling-else',
+          '-Wno-absolute-value',
+          '-Wno-unknown-pragmas']
 
 
 def check_output(cmd, **kwargs):
@@ -107,21 +87,24 @@ def build_alltypes(musl, arch):
 def musl_sources(musl_root):
   """musl sources to be built."""
   sources = []
-  for d in SRC_DIRS:
+  for d in os.listdir(os.path.join(musl_root, 'src')):
+    if d in DIR_BLACKLIST:
+      continue
     base = os.path.join(musl_root, 'src', d)
     pattern = os.path.join(base, '*.c')
     for f in glob.glob(pattern):
       if os.path.basename(f) in BLACKLIST:
         continue
-      sources.append(os.path.join(base, f))
+      sources.append(f)
   return sorted(sources)
 
 
 def includes(musl, arch):
   """Include path."""
-  includes = [os.path.join(musl, 'include'),
+  includes = [
+              os.path.join(musl, 'arch', arch),
               os.path.join(musl, 'src', 'internal'),
-              os.path.join(musl, 'arch', arch)]
+              os.path.join(musl, 'include')]
   return list(itertools.chain(*zip(['-I'] * len(includes), includes)))
 
 
@@ -155,7 +138,7 @@ class ObjCompiler(Compiler):
     compile_cmd = [os.path.join(self.clang_dir, 'clang'), '-target', target,
                    '-Os', '-c', '-nostdinc']
     compile_cmd += includes(self.musl, self.arch)
-    compile_cmd += WARNINGS
+    compile_cmd += CFLAGS
     check_output(compile_cmd + [src], cwd=self.tmpdir)
     return os.path.basename(src)[:-1] + 'o'  # .c -> .o
 
@@ -178,7 +161,7 @@ class AsmCompiler(Compiler):
     compile_cmd = [os.path.join(self.clang_dir, 'clang'), '-target', target,
                    '-Os', '-emit-llvm', '-S', '-nostdinc']
     compile_cmd += includes(self.musl, self.arch)
-    compile_cmd += WARNINGS
+    compile_cmd += CFLAGS
     check_output(compile_cmd + [src], cwd=self.tmpdir)
     return os.path.basename(src)[:-1] + 'll'  # .c -> .ll
 
@@ -222,6 +205,10 @@ def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps,
                              sexpr_wasm)
     compiler.compile(sources)
     compiler.binary()
+    if compile_to_wasm:
+      compiler.compile([os.path.join(musl, 'crt', 'crt1.c')])
+      shutil.copy(os.path.join(tmpdir, compiler.compiled[0]),
+                  os.path.dirname(out))
   finally:
     if not save_temps:
       shutil.rmtree(tmpdir)
