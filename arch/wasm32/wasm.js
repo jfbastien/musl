@@ -973,12 +973,13 @@ if (arguments[0] == '--dump-ffi-symbols') {
   for (var i = arguments.length - 1; i > 0; --i) {
     var path = arguments[i];
     modules[i] = load_wasm(path);
-    for (var f in modules[i]) {
+    for (var f in modules[i].exports) {
       // TODO wasm modules don't have hasOwnProperty. They probably should.
       //      The code should look like:
       //      if (modules[i].hasOwnProperty(f) &&
       //          modules[i][f] instanceof Function)
-      ffi[f] = modules[i][f];
+      if (modules[i].exports[f] instanceof Function)
+        ffi['env'][f] = modules[i].exports[f];
     }
   }
 
