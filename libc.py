@@ -171,6 +171,7 @@ class AsmCompiler(Compiler):
     return os.path.basename(src)[:-1] + 'll'  # .c -> .ll
 
   def binary(self):
+    max_memory = str(16 * 1024 * 1024)
     bytecode = change_extension(self.out, '.bc')
     assembly = os.path.join(self.tmpdir, self.outbase + '.s')
     check_output([os.path.join(self.clang_dir, 'llvm-link'),
@@ -180,7 +181,8 @@ class AsmCompiler(Compiler):
                   bytecode, '-o', assembly],
                  cwd=self.tmpdir)
     check_output([os.path.join(self.binaryen_dir, 's2wasm'),
-                  assembly, '--ignore-unknown', '-o', self.out],
+                  assembly, '--ignore-unknown', '-o', self.out,
+                  '--import-memory', '-m', max_memory],
                  cwd=self.tmpdir)
 
     if self.sexpr_wasm:

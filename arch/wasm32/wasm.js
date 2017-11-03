@@ -21,9 +21,10 @@
  * both as a hobbling libc and a linker/loader, including dynamic linking.
  */
 
-var heap_size_bytes;
-var heap;
-var heap_uint8;
+var heap_size_bytes = 16 * 1024 * 1024;
+var heap_size_pages = heap_size_bytes / (64 * 1024);
+var heap = new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages})
+var heap_uint8 = new Uint8Array(heap);
 
 // Heap access helpers.
 function charFromHeap(ptr) { return String.fromCharCode(heap_uint8[ptr]); }
@@ -930,7 +931,7 @@ var syscall = (function() {
 
 // Start with the stub implementations. Further module loads may shadow them.
 var ffi = (function() {
-  var functions = {env:{}};
+  var functions = {env:{memory: heap}};
   var libraries = [
     musl_hack, // Keep first, overriden later.
     builtins, ctype, math, runtime, stdio, stdlib, string, unix,
@@ -959,9 +960,14 @@ if (arguments[0] == '--dump-ffi-symbols') {
       ? new Uint8Array(readbuffer(file_path))
       : read(file_path, 'binary');
     instance = new WebAssembly.Instance(new WebAssembly.Module(buf), ffi)
-    heap = instance.exports.memory.buffer;
-    heap_uint8 = new Uint8Array(heap);
-    heap_size_bytes = heap.byteLength;
+    // For the application exports its memory, we use that rather than
+    // the one we created. In this way this code works with modules that
+    // import or export thier memory.
+    if (instance.exports.memory) {
+      heap = instance.exports.memory.buffer;instance
+      heap_uint8 = new Uint8Array(heap);instance
+      heap_size_bytes = heap.byteLength;
+    }
     return instance;
   }
 
