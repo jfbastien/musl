@@ -23,14 +23,15 @@
 
 var heap_size_bytes = 16 * 1024 * 1024;
 var heap_size_pages = heap_size_bytes / (64 * 1024);
-var heap = new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages})
+var memory = new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages})
+var heap = memory.buffer;
 var heap_uint8 = new Uint8Array(heap);
 
 // Heap access helpers.
 function charFromHeap(ptr) { return String.fromCharCode(heap_uint8[ptr]); }
 function stringFromHeap(ptr) {
   var str = '';
-  for (var i = ptr; heap_uint8[i] != 0; ++i)
+  for (var i = ptr; i < heap_size_bytes && heap_uint8[i] != 0; ++i)
     str += charFromHeap(i);
   return str;
 }
@@ -523,10 +524,13 @@ var string = (function() {
     strchr: function(str, character) {
       character &= 0xff;
       var i = 0;
-      for (; heap_uint8[str + i] != 0; ++i)
+      for (; heap_uint8[str + i] != 0; ++i) {
+        if (str + i >= heap_size_bytes)
+          return 0;
         if (heap_uint8[str + i] == character)
           return str + i;
-      return heap_uint8[str + i] == 0 ? str + i : 0;
+      }
+      return character == 0 ? str + i : 0;
     },
     strcspn: NYI('strcspn'),
     strpbrk: NYI('strpbrk'),
@@ -931,7 +935,7 @@ var syscall = (function() {
 
 // Start with the stub implementations. Further module loads may shadow them.
 var ffi = (function() {
-  var functions = {env:{memory: heap}};
+  var functions = {env:{memory: memory}};
   var libraries = [
     musl_hack, // Keep first, overriden later.
     builtins, ctype, math, runtime, stdio, stdlib, string, unix,
@@ -964,8 +968,8 @@ if (arguments[0] == '--dump-ffi-symbols') {
     // the one we created. In this way this code works with modules that
     // import or export thier memory.
     if (instance.exports.memory) {
-      heap = instance.exports.memory.buffer;instance
-      heap_uint8 = new Uint8Array(heap);instance
+      heap = instance.exports.memory.buffer;
+      heap_uint8 = new Uint8Array(heap);
       heap_size_bytes = heap.byteLength;
     }
     return instance;
