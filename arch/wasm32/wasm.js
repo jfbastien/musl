@@ -525,7 +525,7 @@ var string = (function() {
       for (; heap_uint8[str + i] != 0; ++i)
         if (heap_uint8[str + i] == character)
           return str + i;
-      return heap_uint8[str + i] == 0 ? str + i : 0;
+      return character == 0 ? str + i : 0;
     },
     strcspn: NYI('strcspn'),
     strpbrk: NYI('strpbrk'),
