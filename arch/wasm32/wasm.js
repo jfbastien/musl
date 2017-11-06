@@ -966,7 +966,7 @@ if (arguments[0] == '--dump-ffi-symbols') {
     instance = new WebAssembly.Instance(new WebAssembly.Module(buf), ffi)
     // For the application exports its memory, we use that rather than
     // the one we created. In this way this code works with modules that
-    // import or export thier memory.
+    // import or export their memory.
     if (instance.exports.memory) {
       heap = instance.exports.memory.buffer;
       heap_uint8 = new Uint8Array(heap);
