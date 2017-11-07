@@ -951,88 +951,83 @@ var ffi = (function() {
 if (arguments.length < 1)
   throw new Error('Expected at least one wasm module to load.');
 
-if (arguments[0] == '--dump-ffi-symbols') {
-  for (var name in ffi["env"])
-    print(name)
-} else {
-  function load_wasm(file_path) {
-    // TODO this should be split up in load, check dependencies, and then resolve
-    // dependencies. That would make it easier to do lazy loading. We could do
-    // this by catching load exceptions + adding to ffi and trying again, but
-    // we're talking silly there: modules should just tell us what they want.
-    const buf = (typeof readbuffer === 'function')
-      ? new Uint8Array(readbuffer(file_path))
-      : read(file_path, 'binary');
-    instance = new WebAssembly.Instance(new WebAssembly.Module(buf), ffi)
-    // For the application exports its memory, we use that rather than
-    // the one we created. In this way this code works with modules that
-    // import or export their memory.
-    if (instance.exports.memory) {
-      heap = instance.exports.memory.buffer;
-      heap_uint8 = new Uint8Array(heap);
-      heap_size_bytes = heap.byteLength;
-    }
-    return instance;
+function load_wasm(file_path) {
+  // TODO this should be split up in load, check dependencies, and then resolve
+  // dependencies. That would make it easier to do lazy loading. We could do
+  // this by catching load exceptions + adding to ffi and trying again, but
+  // we're talking silly there: modules should just tell us what they want.
+  const buf = (typeof readbuffer === 'function')
+    ? new Uint8Array(readbuffer(file_path))
+    : read(file_path, 'binary');
+  instance = new WebAssembly.Instance(new WebAssembly.Module(buf), ffi)
+  // For the application exports its memory, we use that rather than
+  // the one we created. In this way this code works with modules that
+  // import or export their memory.
+  if (instance.exports.memory) {
+    heap = instance.exports.memory.buffer;
+    heap_uint8 = new Uint8Array(heap);
+    heap_size_bytes = heap.byteLength;
   }
+  return instance;
+}
 
-  // Load modules in reverse, adding their exports to the ffi object.
-  // This is analogous to how the linker resolves symbols: the later modules
-  // export symbols used by the earlier modules, and allow shadowing.
-  // Note that all modules, as well as the main module, share a heap.
-  var modules = {};
-  for (var i = arguments.length - 1; i > 0; --i) {
-    var path = arguments[i];
-    modules[i] = load_wasm(path);
-    for (var f in modules[i].exports) {
-      // TODO wasm modules don't have hasOwnProperty. They probably should.
-      //      The code should look like:
-      //      if (modules[i].hasOwnProperty(f) &&
-      //          modules[i][f] instanceof Function)
-      if (modules[i].exports[f] instanceof Function)
-        ffi['env'][f] = modules[i].exports[f];
-    }
+// Load modules in reverse, adding their exports to the ffi object.
+// This is analogous to how the linker resolves symbols: the later modules
+// export symbols used by the earlier modules, and allow shadowing.
+// Note that all modules, as well as the main module, share a heap.
+var modules = {};
+for (var i = arguments.length - 1; i > 0; --i) {
+  var path = arguments[i];
+  modules[i] = load_wasm(path);
+  for (var f in modules[i].exports) {
+    // TODO wasm modules don't have hasOwnProperty. They probably should.
+    //      The code should look like:
+    //      if (modules[i].hasOwnProperty(f) &&
+    //          modules[i][f] instanceof Function)
+    if (modules[i].exports[f] instanceof Function)
+      ffi['env'][f] = modules[i].exports[f];
   }
+}
 
-  // Load the main module once the ffi object has been fully populated.
-  var main_module = arguments[0];
-  modules[0] = load_wasm(main_module);
+// Load the main module once the ffi object has been fully populated.
+var main_module = arguments[0];
+modules[0] = load_wasm(main_module);
 
-  // TODO check that `main` exists in modules[0].exports and error out if not.
+// TODO check that `main` exists in modules[0].exports and error out if not.
 
-  try {
-    var ret = modules[0].exports.main();
-    stdio.__flush_stdout();
-    print(main_module + '::main() returned ' + ret);
-    if (ret != stdlib.EXIT_SUCCESS)
-      throw new Error('main reported failure');
-  } catch (e) {
-    stdio.__flush_stdout();
-    if (e instanceof TerminateWasmException) {
-      print('Program terminated with: ' + e);
-      if (stdlib.__get_exit_code() != stdlib.EXIT_SUCCESS) {
-        throw stdlib.__get_exit_code();
-      }
-    } else if (e instanceof NotYetImplementedException) {
-      print(e);
-      throw e;
-    } else {
-      function is_runtime_trap(e) {
-        if ('string' != typeof e) return false;
-        var traps = ['unreachable',
-                     'memory access out of bounds',
-                     'divide by zero',
-                     'divide result unrepresentable',
-                     'remainder by zero',
-                     'integer result unrepresentable',
-                     'invalid function',
-                     'function signature mismatch'];
-        for (var msg in traps) if (e == traps[msg]) return true;
-        return false;
-      }
-      print(is_runtime_trap(e) ?
-          ('Runtime trap: ' + e) :
-          ('Unknown exception of type `' + typeof(e) + '`: ' + e));
-      throw e;
+try {
+  var ret = modules[0].exports.main();
+  stdio.__flush_stdout();
+  print(main_module + '::main() returned ' + ret);
+  if (ret != stdlib.EXIT_SUCCESS)
+    throw new Error('main reported failure');
+} catch (e) {
+  stdio.__flush_stdout();
+  if (e instanceof TerminateWasmException) {
+    print('Program terminated with: ' + e);
+    if (stdlib.__get_exit_code() != stdlib.EXIT_SUCCESS) {
+      throw stdlib.__get_exit_code();
     }
+  } else if (e instanceof NotYetImplementedException) {
+    print(e);
+    throw e;
+  } else {
+    function is_runtime_trap(e) {
+      if ('string' != typeof e) return false;
+      var traps = ['unreachable',
+                   'memory access out of bounds',
+                   'divide by zero',
+                   'divide result unrepresentable',
+                   'remainder by zero',
+                   'integer result unrepresentable',
+                   'invalid function',
+                   'function signature mismatch'];
+      for (var msg in traps) if (e == traps[msg]) return true;
+      return false;
+    }
+    print(is_runtime_trap(e) ?
+        ('Runtime trap: ' + e) :
+        ('Unknown exception of type `' + typeof(e) + '`: ' + e));
+    throw e;
   }
 }
