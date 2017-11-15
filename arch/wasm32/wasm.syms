@@ -27,8 +27,5 @@ __builtin_apply_args
 __builtin_malloc
 
 # Part of musl we still don't compile for wasm
-__lock
-__unlock
-__set_thread_area
 setjmp
 longjmp
