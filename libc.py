@@ -27,7 +27,7 @@ import tempfile
 
 verbose = False
 
-DIR_BLACKLIST = ['misc', 'thread']
+DIR_BLACKLIST = ['misc']
 BLACKLIST = [
     'puts.c', # Prefer the JS version for now
     'abort.c', # Perfer the JS version for now
