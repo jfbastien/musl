@@ -629,11 +629,11 @@
 #define SYS_get_mempolicy	275
 #define SYS_set_mempolicy	276
 #define SYS_mq_open 		277
-#define SYS_mq_unlink		(SYS_mq_open+1)
-#define SYS_mq_timedsend	(SYS_mq_open+2)
-#define SYS_mq_timedreceive	(SYS_mq_open+3)
-#define SYS_mq_notify		(SYS_mq_open+4)
-#define SYS_mq_getsetattr	(SYS_mq_open+5)
+#define SYS_mq_unlink		278
+#define SYS_mq_timedsend	279
+#define SYS_mq_timedreceive	280
+#define SYS_mq_notify		281
+#define SYS_mq_getsetattr	282
 #define SYS_kexec_load		283
 #define SYS_waitid		284
 /* #define SYS_sys_setaltroot	285 */
