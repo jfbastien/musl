@@ -41,6 +41,7 @@ WEAK_BLACKLIST = [
 CFLAGS = ['-std=c99',
           '-D_XOPEN_SOURCE=700',
           '-Werror',
+          '-Wno-empty-body',
           '-Wno-incompatible-library-redeclaration',
           '-Wno-shift-op-parentheses',
           '-Wno-tautological-unsigned-zero-compare',
