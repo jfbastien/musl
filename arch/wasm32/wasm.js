@@ -286,7 +286,11 @@ var stdio = (function() {
 
   return {
     // Internal.
-    __flush_stdout: function() { print(stdout_buf); stdout_buf = ''; },
+    __flush_stdout: function() {
+      if (stdout_buf[-1] = '\n')
+        stdout_buf = stdout_buf.slice(0, -1);
+      print(stdout_buf); stdout_buf = '';
+    },
 
     // Constants.
     BUFSIZ: 0xffffffff,  // TODO
@@ -341,7 +345,10 @@ var stdio = (function() {
       stdout_buf += String.fromCharCode(character);
       return character;
     },
-    puts: function(str) { stdout_buf += stringFromHeap(str) + '\n'; },
+    puts: function(str) {
+      stdout_buf += stringFromHeap(str) + '\n';
+      stdio.__flush_stdout();
+    },
     ungetc: NYI('ungetc'),
 
     // Direct input/output.
@@ -1249,41 +1256,45 @@ syscall_names = {
   375: "SYS_membarrier"
 }
 
+syscall_numbers = (function() {
+  mapping = {};
+  for (var num in syscall_names) {
+    mapping[syscall_names[num]] = num;
+  }
+  return mapping;
+})();
+
+function syscall_impl(n) {
+  arg_count = arguments.length - 1;
+  var msg = 'syscall' + arg_count + '(' + syscall_names[n];
+  for (var arg_num = 0; arg_num < arg_count; arg_num++) {
+    msg += ', ' + arguments[arg_num+1]
+  }
+  msg += ')';
+  print(msg);
+  var ignore_syscalls = [
+    syscall_numbers["SYS_set_thread_area"],
+    syscall_numbers["SYS_set_tid_address"]
+  ];
+  if (ignore_syscalls.indexOf(n) != -1)
+    return 0;
+  return -1;
+}
+
 // Syscall API with C libraries. In theory this is the only JavaScript
 // implementation we need.
 var syscall = (function() {
   return {
-    __syscall: function(n, args) {
-      print('syscall(' + syscall_names[n] + ', ' + args + ')');
-      return -1; },
-    __syscall0: function(n) {
-      print('syscall0(' + syscall_names[n] + ')');
-      return -1; },
-    __syscall1: function(n, a) {
-      print('syscall1(' + syscall_names[n] + ', ' + a + ')');
-      return -1; },
-    __syscall2: function(n, a, b) {
-      print('syscall2(' + syscall_names[n] + ', ' + a + ', ' + b + ')');
-      return -1; },
-    __syscall3: function(n, a, b, c) {
-      print('syscall3(' + syscall_names[n] + ', ' + a + ', ' + b + ', ' + c + ')');
-      return -1; },
-    __syscall4: function(n, a, b, c, d) {
-      print('syscall4(' + syscall_names[n] + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ')');
-      return -1; },
-    __syscall5: function(n, a, b, c, d, e) {
-      print('syscall4(' + syscall_names[n] + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ', ' +
-            e + ')');
-      return -1; },
-    __syscall6: function(n, a, b, c, d, e, f) {
-      print('syscall6(' + syscall_names[n] + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ', ' +
-            e + ', ' + f + ')');
-      return -1; },
-    __syscall_cp: function(n, a, b, c, d, e, f) {
-      print('syscall_cp(' + syscall_names[n] + ', ' + a + ', ' + b + ', ' + c + ', ' + d + ', ' +
-            e + ', ' + f + ')');
-      return -1; }
-};
+    __syscall: syscall_impl,
+    __syscall0: syscall_impl,
+    __syscall1: syscall_impl,
+    __syscall2: syscall_impl,
+    __syscall3: syscall_impl,
+    __syscall4: syscall_impl,
+    __syscall5: syscall_impl,
+    __syscall6: syscall_impl,
+    __syscall_cp: syscall_impl
+  };
 })();
 
 // Start with the stub implementations. Further module loads may shadow them.
