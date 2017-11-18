@@ -24,14 +24,27 @@
 var heap_size_bytes = 16 * 1024 * 1024;
 var heap_size_pages = heap_size_bytes / (64 * 1024);
 var memory = new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages})
-var heap = memory.buffer;
-var heap_uint8 = new Uint8Array(heap);
+var heap;
+var heap_uint8;
+var heap_uint32;
+
+function setHeap(h) {
+  heap = h
+  heap_uint8 = new Uint8Array(heap);
+  heap_uint32 = new Uint32Array(heap);
+  heap_size_bytes = heap.byteLength;
+}
+
+setHeap(memory.buffer)
 
 // Heap access helpers.
 function charFromHeap(ptr) { return String.fromCharCode(heap_uint8[ptr]); }
-function stringFromHeap(ptr) {
+function stringFromHeap(ptr, len = -1) {
   var str = '';
-  for (var i = ptr; i < heap_size_bytes && heap_uint8[i] != 0; ++i)
+  var end = heap_size_bytes;
+  if (len != -1)
+    end = ptr + len;
+  for (var i = ptr; i < end && heap_uint8[i] != 0; ++i)
     str += charFromHeap(i);
   return str;
 }
@@ -286,6 +299,9 @@ var stdio = (function() {
 
   return {
     // Internal.
+    __write_stdout: function(str) {
+      stdout_buf += str;
+    },
     __flush_stdout: function() {
       if (stdout_buf[-1] = '\n')
         stdout_buf = stdout_buf.slice(0, -1);
@@ -346,7 +362,7 @@ var stdio = (function() {
       return character;
     },
     puts: function(str) {
-      stdout_buf += stringFromHeap(str) + '\n';
+      stdio.__write_stdout(stringFromHeap(str) + '\n');
       stdio.__flush_stdout();
     },
     ungetc: NYI('ungetc'),
@@ -1265,6 +1281,28 @@ syscall_numbers = (function() {
 })();
 
 function syscall_impl(n) {
+  // Special case for writev(stdout), essentially allowing printf to work
+  if (n == syscall_numbers["SYS_writev"]) {
+    if (arguments[1] == 1) {
+      var iov = arguments[2] / 4;
+      var iovcnt = arguments[3];
+      var rtn = 0;
+      for (var i = 0; i < iovcnt; i++) {
+        var ptr = heap_uint32[iov];
+        iov++;
+        var len = heap_uint32[iov];
+        iov++;
+        if (len > 0) {
+          stdio.__write_stdout(stringFromHeap(ptr, len));
+          rtn += len;
+        }
+      }
+      return rtn;
+    }
+  }
+
+  // For other syscalls we trace that args and then either return 0 (ignore
+  // the syscall) or -1, delare that we failed.
   arg_count = arguments.length - 1;
   var msg = 'syscall' + arg_count + '(' + syscall_names[n];
   for (var arg_num = 0; arg_num < arg_count; arg_num++) {
@@ -1272,6 +1310,7 @@ function syscall_impl(n) {
   }
   msg += ')';
   print(msg);
+
   var ignore_syscalls = [
     syscall_numbers["SYS_set_thread_area"],
     syscall_numbers["SYS_set_tid_address"]
@@ -1327,11 +1366,8 @@ function load_wasm(file_path) {
   // For the application exports its memory, we use that rather than
   // the one we created. In this way this code works with modules that
   // import or export their memory.
-  if (instance.exports.memory) {
-    heap = instance.exports.memory.buffer;
-    heap_uint8 = new Uint8Array(heap);
-    heap_size_bytes = heap.byteLength;
-  }
+  if (instance.exports.memory)
+    setHeap(instance.exports.memory.buffer);
   return instance;
 }
 
