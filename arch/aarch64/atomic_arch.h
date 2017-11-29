@@ -10,7 +10,7 @@ static inline int a_ll(volatile int *p)
 static inline int a_sc(volatile int *p, int v)
 {
 	int r;
-	__asm__ __volatile__ ("stlxr %w0,%w1,%2" : "=&r"(r) : "r"(v), "Q"(*p) : "memory");
+	__asm__ __volatile__ ("stlxr %w0,%w2,%1" : "=&r"(r), "=Q"(*p) : "r"(v) : "memory");
 	return !r;
 }
 
@@ -34,6 +34,7 @@ static inline int a_cas(volatile int *p, int t, int s)
 	return old;
 }
 
+#define a_ll_p a_ll_p
 static inline void *a_ll_p(volatile void *p)
 {
 	void *v;
@@ -41,10 +42,11 @@ static inline void *a_ll_p(volatile void *p)
 	return v;
 }
 
+#define a_sc_p a_sc_p
 static inline int a_sc_p(volatile int *p, void *v)
 {
 	int r;
-	__asm__ __volatile__ ("stlxr %w0,%1,%2" : "=&r"(r) : "r"(v), "Q"(*(void *volatile *)p) : "memory");
+	__asm__ __volatile__ ("stlxr %w0,%2,%1" : "=&r"(r), "=Q"(*(void *volatile *)p) : "r"(v) : "memory");
 	return !r;
 }
 
@@ -69,5 +71,12 @@ static inline int a_ctz_64(uint64_t x)
 		"	rbit %0, %1\n"
 		"	clz %0, %0\n"
 		: "=r"(x) : "r"(x));
+	return x;
+}
+
+#define a_clz_64 a_clz_64
+static inline int a_clz_64(uint64_t x)
+{
+	__asm__("clz %0, %1" : "=r"(x) : "r"(x));
 	return x;
 }

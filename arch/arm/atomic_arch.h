@@ -1,5 +1,11 @@
-__attribute__((__visibility__("hidden")))
-extern const void *__arm_atomics[3]; /* gettp, cas, barrier */
+#if __ARM_ARCH_4__ || __ARM_ARCH_4T__ || __ARM_ARCH == 4
+#define BLX "mov lr,pc\n\tbx"
+#else
+#define BLX "blx"
+#endif
+
+extern uintptr_t __attribute__((__visibility__("hidden")))
+	__a_cas_ptr, __a_barrier_ptr;
 
 #if ((__ARM_ARCH_6__ || __ARM_ARCH_6K__ || __ARM_ARCH_6ZK__) && !__thumb__) \
  || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ ||  __ARM_ARCH >= 7
@@ -16,7 +22,7 @@ static inline int a_ll(volatile int *p)
 static inline int a_sc(volatile int *p, int v)
 {
 	int r;
-	__asm__ __volatile__ ("strex %0,%1,%2" : "=&r"(r) : "r"(v), "Q"(*p) : "memory");
+	__asm__ __volatile__ ("strex %0,%2,%1" : "=&r"(r), "=Q"(*p) : "r"(v) : "memory");
 	return !r;
 }
 
@@ -42,11 +48,12 @@ static inline int a_cas(volatile int *p, int t, int s)
 		register int r0 __asm__("r0") = t;
 		register int r1 __asm__("r1") = s;
 		register volatile int *r2 __asm__("r2") = p;
+		register uintptr_t r3 __asm__("r3") = __a_cas_ptr;
 		int old;
 		__asm__ __volatile__ (
-			"bl __a_cas"
-			: "+r"(r0) : "r"(r1), "r"(r2)
-			: "memory", "r3", "lr", "ip", "cc" );
+			BLX " r3"
+			: "+r"(r0), "+r"(r3) : "r"(r1), "r"(r2)
+			: "memory", "lr", "ip", "cc" );
 		if (!r0) return t;
 		if ((old=*p)!=t) return old;
 	}
@@ -58,8 +65,8 @@ static inline int a_cas(volatile int *p, int t, int s)
 #define a_barrier a_barrier
 static inline void a_barrier()
 {
-	__asm__ __volatile__("bl __a_barrier"
-		: : : "memory", "cc", "ip", "lr" );
+	register uintptr_t ip __asm__("ip") = __a_barrier_ptr;
+	__asm__ __volatile__( BLX " ip" : "+r"(ip) : : "memory", "cc", "lr" );
 }
 #endif
 
@@ -74,3 +81,14 @@ static inline void a_crash()
 #endif
 		: : : "memory");
 }
+
+#if __ARM_ARCH >= 5
+
+#define a_clz_32 a_clz_32
+static inline int a_clz_32(uint32_t x)
+{
+	__asm__ ("clz %0, %1" : "=r"(x) : "r"(x));
+	return x;
+}
+
+#endif

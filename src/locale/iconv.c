@@ -18,6 +18,7 @@
 #define UTF_8       0310
 #define EUC_JP      0320
 #define SHIFT_JIS   0321
+#define ISO2022_JP  0322
 #define GB18030     0330
 #define GBK         0331
 #define GB2312      0332
@@ -26,8 +27,10 @@
 
 /* Definitions of charmaps. Each charmap consists of:
  * 1. Empty-string-terminated list of null-terminated aliases.
- * 2. Special type code or number of elided entries.
- * 3. Character table (size determined by field 2). */
+ * 2. Special type code or number of elided quads of entries.
+ * 3. Character table (size determined by field 2), consisting
+ *    of 5 bytes for every 4 characters, interpreted as 10-bit
+ *    indices into the legacy_chars table. */
 
 static const unsigned char charmaps[] =
 "utf8\0char\0\0\310"
@@ -41,6 +44,7 @@ static const unsigned char charmaps[] =
 "ascii\0usascii\0iso646\0iso646us\0\0\307"
 "eucjp\0\0\320"
 "shiftjis\0sjis\0\0\321"
+"iso2022jp\0\0\322"
 "gb18030\0\0\330"
 "gbk\0\0\331"
 "gb2312\0\0\332"
@@ -49,6 +53,9 @@ static const unsigned char charmaps[] =
 #include "codepages.h"
 ;
 
+/* Table of characters that appear in legacy 8-bit codepages,
+ * limited to 1024 slots (10 bit indices). The first 256 entries
+ * are elided since those characters are obviously all included. */
 static const unsigned short legacy_chars[] = {
 #include "legacychars.h"
 };
@@ -73,6 +80,10 @@ static const unsigned short ksc[93][94] = {
 #include "ksc.h"
 };
 
+static const unsigned short rev_jis[] = {
+#include "revjis.h"
+};
+
 static int fuzzycmp(const unsigned char *a, const unsigned char *b)
 {
 	for (; *a && *b; a++, b++) {
@@ -94,29 +105,55 @@ static size_t find_charmap(const void *name)
 		s += strlen((void *)s)+1;
 		if (!*s) {
 			if (s[1] > 0200) s+=2;
-			else s+=2+(128U-s[1])/4*5;
+			else s+=2+(64U-s[1])*5;
 		}
 	}
 	return -1;
 }
 
+struct stateful_cd {
+	iconv_t base_cd;
+	unsigned state;
+};
+
+static iconv_t combine_to_from(size_t t, size_t f)
+{
+	return (void *)(f<<16 | t<<1 | 1);
+}
+
+static size_t extract_from(iconv_t cd)
+{
+	return (size_t)cd >> 16;
+}
+
+static size_t extract_to(iconv_t cd)
+{
+	return (size_t)cd >> 1 & 0x7fff;
+}
+
 iconv_t iconv_open(const char *to, const char *from)
 {
 	size_t f, t;
+	struct stateful_cd *scd;
 
 	if ((t = find_charmap(to))==-1
 	 || (f = find_charmap(from))==-1
-	 || (charmaps[t] >= 0320)) {
+	 || (charmaps[t] >= 0330)) {
 		errno = EINVAL;
 		return (iconv_t)-1;
 	}
+	iconv_t cd = combine_to_from(t, f);
 
-	return (void *)(f<<16 | t);
-}
+	switch (charmaps[f]) {
+	case ISO2022_JP:
+		scd = malloc(sizeof *scd);
+		if (!scd) return (iconv_t)-1;
+		scd->base_cd = cd;
+		scd->state = 0;
+		cd = (iconv_t)scd;
+	}
 
-int iconv_close(iconv_t cd)
-{
-	return 0;
+	return cd;
 }
 
 static unsigned get_16(const unsigned char *s, int e)
@@ -151,12 +188,43 @@ static void put_32(unsigned char *s, unsigned c, int e)
 #define mbrtowc_utf8 mbrtowc
 #define wctomb_utf8 wctomb
 
-size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restrict out, size_t *restrict outb)
+static unsigned legacy_map(const unsigned char *map, unsigned c)
+{
+	if (c < 4*map[-1]) return c;
+	unsigned x = c - 4*map[-1];
+	x = map[x*5/4]>>2*x%8 | map[x*5/4+1]<<8-2*x%8 & 1023;
+	return x < 256 ? x : legacy_chars[x-256];
+}
+
+static unsigned uni_to_jis(unsigned c)
+{
+	unsigned nel = sizeof rev_jis / sizeof *rev_jis;
+	unsigned d, j, i, b = 0;
+	for (;;) {
+		i = nel/2;
+		j = rev_jis[b+i];
+		d = jis0208[j/256][j%256];
+		if (d==c) return j + 0x2121;
+		else if (nel == 1) return 0;
+		else if (c < d)
+			nel /= 2;
+		else {
+			b += i;
+			nel -= nel/2;
+		}
+	}
+}
+
+size_t iconv(iconv_t cd, char **restrict in, size_t *restrict inb, char **restrict out, size_t *restrict outb)
 {
 	size_t x=0;
-	unsigned long cd = (unsigned long)cd0;
-	unsigned to = cd & 0xffff;
-	unsigned from = cd >> 16;
+	struct stateful_cd *scd=0;
+	if (!((size_t)cd & 1)) {
+		scd = (void *)cd;
+		cd = scd->base_cd;
+	}
+	unsigned to = extract_to(cd);
+	unsigned from = extract_from(cd);
 	const unsigned char *map = charmaps+from+1;
 	const unsigned char *tomap = charmaps+to+1;
 	mbstate_t st = {0};
@@ -176,16 +244,17 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 		c = *(unsigned char *)*in;
 		l = 1;
 
-		if (c >= 128 || type-UTF_32BE < 7U) switch (type) {
+		switch (type) {
 		case UTF_8:
+			if (c < 128) break;
 			l = mbrtowc_utf8(&wc, *in, *inb, &st);
-			if (!l) l++;
-			else if (l == (size_t)-1) goto ilseq;
-			else if (l == (size_t)-2) goto starved;
+			if (l == (size_t)-1) goto ilseq;
+			if (l == (size_t)-2) goto starved;
 			c = wc;
 			break;
 		case US_ASCII:
-			goto ilseq;
+			if (c >= 128) goto ilseq;
+			break;
 		case WCHAR_T:
 			l = sizeof(wchar_t);
 			if (*inb < l) goto starved;
@@ -217,6 +286,7 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 			}
 			break;
 		case SHIFT_JIS:
+			if (c < 128) break;
 			if (c-0xa1 <= 0xdf-0xa1) {
 				c += 0xff61-0xa1;
 				break;
@@ -240,6 +310,7 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 			if (!c) goto ilseq;
 			break;
 		case EUC_JP:
+			if (c < 128) break;
 			l = 2;
 			if (*inb < 2) goto starved;
 			d = *((unsigned char *)*in + 1);
@@ -255,10 +326,51 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 			c = jis0208[c][d];
 			if (!c) goto ilseq;
 			break;
+		case ISO2022_JP:
+			if (c >= 128) goto ilseq;
+			if (c == '\033') {
+				l = 3;
+				if (*inb < 3) goto starved;
+				c = *((unsigned char *)*in + 1);
+				d = *((unsigned char *)*in + 2);
+				if (c != '(' && c != '$') goto ilseq;
+				switch (128*(c=='$') + d) {
+				case 'B': scd->state=0; continue;
+				case 'J': scd->state=1; continue;
+				case 'I': scd->state=4; continue;
+				case 128+'@': scd->state=2; continue;
+				case 128+'B': scd->state=3; continue;
+				}
+				goto ilseq;
+			}
+			switch (scd->state) {
+			case 1:
+				if (c=='\\') c = 0xa5;
+				if (c=='~') c = 0x203e;
+				break;
+			case 2:
+			case 3:
+				l = 2;
+				if (*inb < 2) goto starved;
+				d = *((unsigned char *)*in + 1);
+				c -= 0x21;
+				d -= 0x21;
+				if (c >= 84 || d >= 94) goto ilseq;
+				c = jis0208[c][d];
+				if (!c) goto ilseq;
+				break;
+			case 4:
+				if (c-0x60 < 0x1f) goto ilseq;
+				if (c-0x21 < 0x5e) c += 0xff61-0x21;
+				break;
+			}
+			break;
 		case GB2312:
+			if (c < 128) break;
 			if (c < 0xa1) goto ilseq;
 		case GBK:
 		case GB18030:
+			if (c < 128) break;
 			c -= 0x81;
 			if (c >= 126) goto ilseq;
 			l = 2;
@@ -294,6 +406,7 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 			c = gb18030[c][d];
 			break;
 		case BIG5:
+			if (c < 128) break;
 			l = 2;
 			if (*inb < 2) goto starved;
 			d = *((unsigned char *)*in + 1);
@@ -314,7 +427,7 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 					if (totype-0300U > 8) k = 2;
 					else k = "\10\4\4\10\4\4\10\2\4"[totype-0300];
 					if (k > *outb) goto toobig;
-					x += iconv((iconv_t)(uintptr_t)to,
+					x += iconv(combine_to_from(to, 0),
 						&(char *){"\303\212\314\204"
 						"\303\212\314\214"
 						"\303\252\314\204"
@@ -331,6 +444,7 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 			if (!c) goto ilseq;
 			break;
 		case EUC_KR:
+			if (c < 128) break;
 			l = 2;
 			if (*inb < 2) goto starved;
 			d = *((unsigned char *)*in + 1);
@@ -363,12 +477,9 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 			if (!c) goto ilseq;
 			break;
 		default:
-			if (c < 128+type) break;
-			c -= 128+type;
-			c = legacy_chars[ map[c*5/4]>>2*c%8 |
-				map[c*5/4+1]<<8-2*c%8 & 1023 ];
-			if (!c) c = *(unsigned char *)*in;
-			if (c==1) goto ilseq;
+			if (!c) break;
+			c = legacy_map(map, c);
+			if (!c) goto ilseq;
 		}
 
 		switch (totype) {
@@ -392,21 +503,92 @@ size_t iconv(iconv_t cd0, char **restrict in, size_t *restrict inb, char **restr
 			if (c > 0x7f) subst: x++, c='*';
 		default:
 			if (*outb < 1) goto toobig;
-			if (c < 128+totype) {
+			if (c<256 && c==legacy_map(tomap, c)) {
 			revout:
 				*(*out)++ = c;
 				*outb -= 1;
 				break;
 			}
 			d = c;
-			for (c=0; c<128-totype; c++) {
-				if (d == legacy_chars[ tomap[c*5/4]>>2*c%8 |
-					tomap[c*5/4+1]<<8-2*c%8 & 1023 ]) {
-					c += 128;
+			for (c=4*totype; c<256; c++) {
+				if (d == legacy_map(tomap, c)) {
 					goto revout;
 				}
 			}
 			goto subst;
+		case SHIFT_JIS:
+			if (c < 128) goto revout;
+			if (c == 0xa5) {
+				x++;
+				c = '\\';
+				goto revout;
+			}
+			if (c == 0x203e) {
+				x++;
+				c = '~';
+				goto revout;
+			}
+			if (c-0xff61 <= 0xdf-0xa1) {
+				c += 0xa1 - 0xff61;
+				goto revout;
+			}
+			c = uni_to_jis(c);
+			if (!c) goto subst;
+			if (*outb < 2) goto toobig;
+			d = c%256;
+			c = c/256;
+			*(*out)++ = (c+1)/2 + (c<95 ? 112 : 176);
+			*(*out)++ = c%2 ? d + 31 + d/96 : d + 126;
+			*outb -= 2;
+			break;
+		case EUC_JP:
+			if (c < 128) goto revout;
+			if (c-0xff61 <= 0xdf-0xa1) {
+				c += 0x0e00 + 0x21 - 0xff61;
+			} else {
+				c = uni_to_jis(c);
+			}
+			if (!c) goto subst;
+			if (*outb < 2) goto toobig;
+			*(*out)++ = c/256 + 0x80;
+			*(*out)++ = c%256 + 0x80;
+			*outb -= 2;
+			break;
+		case ISO2022_JP:
+			if (c < 128) goto revout;
+			if (c-0xff61 <= 0xdf-0xa1 || c==0xa5 || c==0x203e) {
+				if (*outb < 7) goto toobig;
+				*(*out)++ = '\033';
+				*(*out)++ = '(';
+				if (c==0xa5) {
+					*(*out)++ = 'J';
+					*(*out)++ = '\\';
+				} else if (c==0x203e) {
+					*(*out)++ = 'J';
+					*(*out)++ = '~';
+				} else {
+					*(*out)++ = 'I';
+					*(*out)++ = c-0xff61+0x21;
+				}
+				*(*out)++ = '\033';
+				*(*out)++ = '(';
+				*(*out)++ = 'B';
+				*outb -= 7;
+				break;
+			}
+			c = uni_to_jis(c);
+			if (!c) goto subst;
+			if (*outb < 8) goto toobig;
+			*(*out)++ = '\033';
+			*(*out)++ = '$';
+			*(*out)++ = 'B';
+			*(*out)++ = c/256;
+			*(*out)++ = c%256;
+			*(*out)++ = '\033';
+			*(*out)++ = '(';
+			*(*out)++ = 'B';
+			*outb -= 8;
+			break;
 		case UCS2BE:
 		case UCS2LE:
 		case UTF_16BE:
