@@ -209,34 +209,26 @@ class AsmCompiler(Compiler):
                    cwd=self.tmpdir)
 
 
-def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps,
-    compile_to_wasm):
-  if save_temps:
-    tmpdir = os.path.join(musl, 'obj')
-    if os.path.isdir(tmpdir):
-      shutil.rmtree(tmpdir)
-    os.mkdir(tmpdir)
-  else:
-    tmpdir = tempfile.mkdtemp()
+def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, compile_to_wasm):
+  objdir = os.path.join(os.path.dirname(out), 'obj')
+  if os.path.isdir(objdir):
+    shutil.rmtree(objdir)
+  os.mkdir(objdir)
 
-  try:
-    create_version(musl, tmpdir)
-    build_headers(musl, arch, tmpdir)
-    sources = musl_sources(musl, include_weak=compile_to_wasm)
-    if compile_to_wasm:
-      compiler = ObjCompiler(out, clang_dir, musl, arch, tmpdir)
-    else:
-      compiler = AsmCompiler(out, clang_dir, musl, arch, tmpdir, binaryen_dir,
-                             sexpr_wasm)
-    compiler.compile(sources)
-    compiler.binary()
-    if compile_to_wasm:
-      compiler.compile([os.path.join(musl, 'crt', 'crt1.c')])
-      shutil.copy(os.path.join(tmpdir, compiler.compiled[0]),
-                  os.path.dirname(out))
-  finally:
-    if not save_temps:
-      shutil.rmtree(tmpdir)
+  create_version(musl, objdir)
+  build_headers(musl, arch, objdir)
+  sources = musl_sources(musl, include_weak=compile_to_wasm)
+  if compile_to_wasm:
+    compiler = ObjCompiler(out, clang_dir, musl, arch, objdir)
+  else:
+    compiler = AsmCompiler(out, clang_dir, musl, arch, objdir, binaryen_dir,
+                           sexpr_wasm)
+  compiler.compile(sources)
+  compiler.binary()
+  if compile_to_wasm:
+    compiler.compile([os.path.join(musl, 'crt', 'crt1.c')])
+    shutil.copy(os.path.join(objdir, compiler.compiled[0]),
+                os.path.dirname(out))
 
 
 def getargs():
@@ -254,8 +246,6 @@ def getargs():
   parser.add_argument('--out', '-o', type=str,
                       default=os.path.join(os.getcwd(), 'musl.wast'),
                       help='Output file')
-  parser.add_argument('--save-temps', default=False, action='store_true',
-                      help='Save temporary files')
   parser.add_argument('--verbose', default=False, action='store_true',
                       help='Verbose')
   parser.add_argument('--compile-to-wasm', default=False, action='store_true',
@@ -269,8 +259,7 @@ def main():
   if args.verbose:
     verbose = True
   return run(args.clang_dir, args.binaryen_dir, args.sexpr_wasm,
-             args.musl, args.arch, args.out, args.save_temps,
-             args.compile_to_wasm)
+             args.musl, args.arch, args.out, args.compile_to_wasm)
 
 
 if __name__ == '__main__':
