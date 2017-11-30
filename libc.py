@@ -27,11 +27,12 @@ import tempfile
 
 verbose = False
 
-DIR_BLACKLIST = ['misc']
+DIR_BLACKLIST = ['misc', 'ldso']
 BLACKLIST = [
     'puts.c', # Prefer the JS version for now
     'abort.c', # Perfer the JS version for now
     '_Exit.c', # Perfer the JS version for now
+    '__init_tls.c',
 ]
 # Files that contain weak reference which are not suppoered by s2wasm
 WEAK_BLACKLIST = [
@@ -55,6 +56,7 @@ CFLAGS = ['-std=c99',
           '-Wno-pointer-sign',
           '-Wno-dangling-else',
           '-Wno-absolute-value',
+          '-Wno-parentheses',
           '-Wno-unknown-pragmas']
 
 
@@ -70,21 +72,33 @@ def change_extension(path, new_extension):
   return path[:path.rfind('.')] + new_extension
 
 
-def create_version(musl):
+def create_version(musl, outdir):
   """musl's Makefile creates version.h"""
   script = os.path.join(musl, 'tools', 'version.sh')
   version = check_output(['sh', script], cwd=musl).strip()
-  with open(os.path.join(musl, 'src', 'internal', 'version.h'), 'w') as v:
+  outroot = os.path.join(outdir, 'src', 'internal')
+  if not os.path.exists(outroot):
+    os.makedirs(outroot)
+  with open(os.path.join(outroot, 'version.h'), 'w') as v:
     v.write('#define VERSION "%s"\n' % version)
 
 
-def build_alltypes(musl, arch):
-  """Emulate musl's Makefile build of alltypes.h."""
+def build_headers(musl, arch, outdir):
+  """Emulate musl's Makefile build of alltypes.h and syscall.h"""
+  outroot = os.path.join(outdir, 'include', 'bits')
+  if not os.path.exists(outroot):
+    os.makedirs(outroot)
   mkalltypes = os.path.join(musl, 'tools', 'mkalltypes.sed')
   inbits = os.path.join(musl, 'arch', arch, 'bits', 'alltypes.h.in')
   intypes = os.path.join(musl, 'include', 'alltypes.h.in')
   out = check_output(['sed', '-f', mkalltypes, inbits, intypes])
-  with open(os.path.join(musl, 'arch', arch, 'bits', 'alltypes.h'), 'w') as o:
+  with open(os.path.join(outroot, 'alltypes.h'), 'w') as o:
+    o.write(out)
+
+  insyscall = os.path.join(musl, 'arch', arch, 'bits', 'syscall.h.in')
+  out = check_output(['sed', '-n', '-e', 's/__NR_/SYS_/p', insyscall])
+  with open(os.path.join(outroot, 'syscall.h'), 'w') as o:
+    o.write(open(insyscall).read())
     o.write(out)
 
 
@@ -105,11 +119,14 @@ def musl_sources(musl_root, include_weak):
   return sorted(sources)
 
 
-def includes(musl, arch):
+def includes(musl, arch, outdir):
   """Include path."""
   includes = [
               os.path.join(musl, 'arch', arch),
+              os.path.join(musl, 'arch', 'generic'),
+              os.path.join(outdir, 'src', 'internal'),
               os.path.join(musl, 'src', 'internal'),
+              os.path.join(outdir, 'include'),
               os.path.join(musl, 'include')]
   return list(itertools.chain(*zip(['-I'] * len(includes), includes)))
 
@@ -143,7 +160,7 @@ class ObjCompiler(Compiler):
     target = 'wasm32-unknown-unknown-wasm'
     compile_cmd = [os.path.join(self.clang_dir, 'clang'), '-target', target,
                    '-Os', '-c', '-nostdinc']
-    compile_cmd += includes(self.musl, self.arch)
+    compile_cmd += includes(self.musl, self.arch, self.tmpdir)
     compile_cmd += CFLAGS
     check_output(compile_cmd + [src], cwd=self.tmpdir)
     return os.path.basename(src)[:-1] + 'o'  # .c -> .o
@@ -166,7 +183,7 @@ class AsmCompiler(Compiler):
     target = 'wasm32-unknown-unknown'
     compile_cmd = [os.path.join(self.clang_dir, 'clang'), '-target', target,
                    '-Os', '-emit-llvm', '-S', '-nostdinc']
-    compile_cmd += includes(self.musl, self.arch)
+    compile_cmd += includes(self.musl, self.arch, self.tmpdir)
     compile_cmd += CFLAGS
     check_output(compile_cmd + [src], cwd=self.tmpdir)
     return os.path.basename(src)[:-1] + 'll'  # .c -> .ll
@@ -195,7 +212,7 @@ class AsmCompiler(Compiler):
 def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps,
     compile_to_wasm):
   if save_temps:
-    tmpdir = os.path.join(os.getcwd(), 'libc_build')
+    tmpdir = os.path.join(musl, 'obj')
     if os.path.isdir(tmpdir):
       shutil.rmtree(tmpdir)
     os.mkdir(tmpdir)
@@ -203,8 +220,8 @@ def run(clang_dir, binaryen_dir, sexpr_wasm, musl, arch, out, save_temps,
     tmpdir = tempfile.mkdtemp()
 
   try:
-    create_version(musl)
-    build_alltypes(musl, arch)
+    create_version(musl, tmpdir)
+    build_headers(musl, arch, tmpdir)
     sources = musl_sources(musl, include_weak=compile_to_wasm)
     if compile_to_wasm:
       compiler = ObjCompiler(out, clang_dir, musl, arch, tmpdir)

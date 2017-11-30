@@ -25,12 +25,13 @@ Fine tuning of the installation directories:
 System types:
   --target=TARGET         configure to run on target TARGET [detected]
   --host=HOST             same as --target
+  --build=BUILD           build system type; used only to infer cross-compiling
 
 Optional features:
   --enable-optimize=...   optimize listed components for speed over size [auto]
   --enable-debug          build with debugging information [disabled]
   --enable-warnings       build with recommended warnings flags [disabled]
-  --enable-visibility     use global visibility options to optimize PIC [auto]
+  --enable-visibility     use global visibility options to optimize PIC [no]
   --enable-wrapper=...    build given musl toolchain wrapper [auto]
   --disable-shared        inhibit building shared library [enabled]
   --disable-static        inhibit building static library [enabled]
@@ -129,11 +130,12 @@ includedir='$(prefix)/include'
 syslibdir='/lib'
 tools=
 tool_libs=
+build=
 target=
 optimize=auto
 debug=no
 warnings=no
-visibility=auto
+visibility=no
 shared=auto
 static=yes
 wrapper=auto
@@ -142,7 +144,7 @@ clang_wrapper=no
 
 for arg ; do
 case "$arg" in
---help) usage ;;
+--help|-h) usage ;;
 --srcdir=*) srcdir=${arg#*=} ;;
 --prefix=*) prefix=${arg#*=} ;;
 --exec-prefix=*) exec_prefix=${arg#*=} ;;
@@ -161,6 +163,7 @@ case "$arg" in
 --disable-debug|--enable-debug=no) debug=no ;;
 --enable-warnings|--enable-warnings=yes) warnings=yes ;;
 --disable-warnings|--enable-warnings=no) warnings=no ;;
+--enable-visibility=auto) visibility=auto ;;
 --enable-visibility|--enable-visibility=yes) visibility=yes ;;
 --disable-visibility|--enable-visibility=no) visibility=no ;;
 --enable-wrapper|--enable-wrapper=yes) wrapper=detect ;;
@@ -170,8 +173,9 @@ case "$arg" in
 --disable-wrapper|--enable-wrapper=no) wrapper=no ;;
 --enable-gcc-wrapper|--enable-gcc-wrapper=yes) wrapper=yes ; gcc_wrapper=yes ;;
 --disable-gcc-wrapper|--enable-gcc-wrapper=no) wrapper=no ;;
---enable-*|--disable-*|--with-*|--without-*|--*dir=*|--build=*) ;;
+--enable-*|--disable-*|--with-*|--without-*|--*dir=*) ;;
 --host=*|--target=*) target=${arg#*=} ;;
+--build=*) build=${arg#*=} ;;
 -* ) echo "$0: unknown option $arg" ;;
 CC=*) CC=${arg#*=} ;;
 CFLAGS=*) CFLAGS=${arg#*=} ;;
@@ -180,7 +184,7 @@ LDFLAGS=*) LDFLAGS=${arg#*=} ;;
 CROSS_COMPILE=*) CROSS_COMPILE=${arg#*=} ;;
 LIBCC=*) LIBCC=${arg#*=} ;;
 *=*) ;;
-*) target=$arg ;;
+*) build=$arg ; target=$arg ;;
 esac
 done
 
@@ -214,6 +218,15 @@ set +C
 trap 'rm "$tmpc"' EXIT INT QUIT TERM HUP
 
 #
+# Check whether we are cross-compiling, and set a default
+# CROSS_COMPILE prefix if none was provided.
+#
+test "$target" && \
+test "$target" != "$build" && \
+test -z "$CROSS_COMPILE" && \
+CROSS_COMPILE="$target-"
+
+#
 # Find a C compiler to use
 #
 printf "checking for C compiler... "
@@ -237,6 +250,7 @@ fi
 #
 tryflag   CFLAGS_TRY  -Werror=unknown-warning-option
 tryflag   CFLAGS_TRY  -Werror=unused-command-line-argument
+tryflag   CFLAGS_TRY  -Werror=ignored-optimization-argument
 tryldflag LDFLAGS_TRY -Werror=unknown-warning-option
 tryldflag LDFLAGS_TRY -Werror=unused-command-line-argument
 
@@ -299,18 +313,22 @@ printf "%s\n" "$target"
 #
 case "$target" in
 # Catch these early to simplify matching for 32-bit archs
-mips64*|powerpc64*) fail "$0: unsupported target \"$target\"" ;;
 arm*) ARCH=arm ;;
 aarch64*) ARCH=aarch64 ;;
+i?86-nt32*) ARCH=nt32 ;;
 i?86*) ARCH=i386 ;;
 x86_64-x32*|x32*|x86_64*x32) ARCH=x32 ;;
+x86_64-nt64*) ARCH=nt64 ;;
 x86_64*) ARCH=x86_64 ;;
+mips64*|mipsisa64*) ARCH=mips64 ;;
 mips*) ARCH=mips ;;
 microblaze*) ARCH=microblaze ;;
 or1k*) ARCH=or1k ;;
+powerpc64*) ARCH=powerpc64 ;;
 powerpc*) ARCH=powerpc ;;
 wasm*) ARCH=wasm32 ;;
 sh[1-9bel-]*|sh|superh*) ARCH=sh ;;
+s390x*) ARCH=s390x ;;
 unknown) fail "$0: unable to detect target arch; try $0 --target=..." ;;
 *) fail "$0: unknown or unsupported target \"$target\"" ;;
 esac
@@ -339,7 +357,7 @@ __attribute__((__may_alias__))
 #endif
 x;
 EOF
-if $CC $CFLAGS_C99FSE -I$srcdir/arch/$ARCH -I$srcdir/include $CPPFLAGS $CFLAGS \
+if $CC $CFLAGS_C99FSE $CPPFLAGS $CFLAGS \
   -c -o /dev/null "$tmpc" >/dev/null 2>&1 ; then
 printf "no\n"
 else
@@ -489,6 +507,13 @@ tryflag CFLAGS_AUTO -Werror=implicit-int
 tryflag CFLAGS_AUTO -Werror=pointer-sign
 tryflag CFLAGS_AUTO -Werror=pointer-arith
 
+#
+# GCC ignores unused arguements by default, but Clang needs this extra
+# parameter to stop printing warnings about LDFLAGS passed during
+# compiling stage and CFLAGS passed during linking stage.
+#
+tryflag CFLAGS_AUTO -Qunused-arguments
+
 if test "x$warnings" = xyes ; then
 tryflag CFLAGS_AUTO -Wall
 tryflag CFLAGS_AUTO -Wno-parentheses
@@ -566,15 +591,10 @@ tryldflag LDFLAGS_AUTO -Wl,--no-undefined
 # versions built without shared library support and pcc are broken.
 tryldflag LDFLAGS_AUTO -Wl,--exclude-libs=ALL
 
-test "$shared" = "no" || {
-# Disable dynamic linking if ld is broken and can't do -Bsymbolic-functions
-LDFLAGS_DUMMY=
-tryldflag LDFLAGS_DUMMY -Wl,-Bsymbolic-functions || {
-test "$shared" = "yes" && fail "$0: error: linker cannot build shared library"
-printf "warning: disabling dynamic linking support\n"
-shared=no
-}
-}
+# Linking with -Bsymbolic-functions is no longer mandatory for
+# the dynamic linker to work, but enable it if it works as
+# a linking optimization.
+tryldflag LDFLAGS_AUTO -Wl,-Bsymbolic-functions
 
 # Find compiler runtime library
 test -z "$LIBCC" && tryldflag LIBCC -lgcc && tryldflag LIBCC -lgcc_eh
@@ -592,8 +612,26 @@ trycppif __ILP32__ "$t" && ARCH=x32
 fi
 
 if test "$ARCH" = "arm" ; then
+if trycppif __thumb2__ "$t" ; then
+tryflag CFLAGS_AUTO -Wa,-mimplicit-it=always
+tryflag CFLAGS_AUTO -Wa,-mthumb
+fi
 trycppif __ARMEB__ "$t" && SUBARCH=${SUBARCH}eb
 trycppif __ARM_PCS_VFP "$t" && SUBARCH=${SUBARCH}hf
+# Versions of clang up until at least 3.8 have the wrong constraint codes
+# for floating point operands to inline asm. Detect this so the affected
+# source files can just disable the asm.
+if test "$cc_family" = clang ; then
+printf "checking whether clang's vfp asm constraints work... "
+echo 'float f(float x) { __asm__("":"+t"(x)); return x; }' > "$tmpc"
+if $CC $CFLAGS_C99FSE $CPPFLAGS $CFLAGS -c -o /dev/null "$tmpc" >/dev/null 2>&1 ; then
+printf "yes\n"
+else
+printf "no\n"
+CFLAGS_AUTO="$CFLAGS_AUTO -DBROKEN_VFP_ASM"
+CFLAGS_AUTO="${CFLAGS_AUTO# }"
+fi
+fi
 fi
 
 if test "$ARCH" = "aarch64" ; then
@@ -601,12 +639,32 @@ trycppif __AARCH64EB__ "$t" && SUBARCH=${SUBARCH}_be
 fi
 
 if test "$ARCH" = "mips" ; then
+trycppif "__mips_isa_rev >= 6" "$t" && SUBARCH=${SUBARCH}r6
 trycppif "_MIPSEL || __MIPSEL || __MIPSEL__" "$t" && SUBARCH=${SUBARCH}el
 trycppif __mips_soft_float "$t" && SUBARCH=${SUBARCH}-sf
 fi
 
+if test "$ARCH" = "mips64" ; then
+trycppif "_MIPS_SIM != _ABI64" "$t" && ARCH=mipsn32
+trycppif "__mips_isa_rev >= 6" "$t" && SUBARCH=${SUBARCH}r6
+trycppif "_MIPSEL || __MIPSEL || __MIPSEL__" "$t" && SUBARCH=${SUBARCH}el
+trycppif __mips_soft_float "$t" && SUBARCH=${SUBARCH}-sf
+fi
+
+if test "$ARCH" = "powerpc" ; then
+trycppif "__NO_FPRS__ && !_SOFT_FLOAT" "$t" && fail \
+  "$0: error: compiler's floating point configuration is unsupported"
+trycppif _SOFT_FLOAT "$t" && SUBARCH=${SUBARCH}-sf
+fi
+
 test "$ARCH" = "microblaze" && trycppif __MICROBLAZEEL__ "$t" \
 && SUBARCH=${SUBARCH}el
+
+if test "$ARCH" = "powerpc64" ; then
+trycppif "_CALL_ELF == 2" "$t" || fail "$0: error: unsupported powerpc64 ABI"
+trycppif __LITTLE_ENDIAN__ "$t" && SUBARCH=${SUBARCH}le
+trycppif _SOFT_FLOAT "$t" && fail "$0: error: soft-float not supported on powerpc64"
+fi
 
 if test "$ARCH" = "sh" ; then
 tryflag CFLAGS_AUTO -Wa,--isa=any
@@ -652,12 +710,23 @@ echo '#include <float.h>' > "$tmpc"
 echo '#if LDBL_MANT_DIG == 53' >> "$tmpc"
 echo 'typedef char ldcheck[9-(int)sizeof(long double)];' >> "$tmpc"
 echo '#endif' >> "$tmpc"
-if $CC $CFLAGS_C99FSE -I$srcdir/arch/$ARCH -I$srcdir/include $CPPFLAGS $CFLAGS \
-  -c -o /dev/null "$tmpc" >/dev/null 2>&1 ; then
+if $CC $CFLAGS_C99FSE \
+  -I$srcdir/arch/$ARCH -I$srcdir/arch/generic -I$srcdir/include \
+  $CPPFLAGS $CFLAGS -c -o /dev/null "$tmpc" >/dev/null 2>&1 ; then
 printf "yes\n"
 else
 printf "no\n"
 fail "$0: error: unsupported long double type"
+fi
+
+#
+# Some build systems globally pass in broken CFLAGS like -ffast-math
+# for all packages. On recent GCC we can detect this and error out
+# early rather than producing a seriously-broken math library.
+#
+if trycppif "__FAST_MATH__" \
+  "$CFLAGS_C99FSE $CPPFLAGS $CFLAGS" ; then
+fail "$0: error: compiler has broken floating point; check CFLAGS"
 fi
 
 printf "creating config.mak... "

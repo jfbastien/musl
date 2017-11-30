@@ -1,5 +1,11 @@
 #include <endian.h>
 
+#if __mips_isa_rev >= 6
+#define ISA_SUFFIX "r6"
+#else
+#define ISA_SUFFIX ""
+#endif
+
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define ENDIAN_SUFFIX "el"
 #else
@@ -12,7 +18,7 @@
 #define FP_SUFFIX ""
 #endif
 
-#define LDSO_ARCH "mips" ENDIAN_SUFFIX FP_SUFFIX
+#define LDSO_ARCH "mips" ISA_SUFFIX ENDIAN_SUFFIX FP_SUFFIX
 
 #define TPOFF_K (-0x7000)
 
@@ -24,7 +30,7 @@
 #define REL_TPOFF       R_MIPS_TLS_TPREL32
 
 #define NEED_MIPS_GOT_RELOCS 1
-#define DYNAMIC_IS_RO 1
+#define DT_DEBUG_INDIRECT DT_MIPS_RLD_MAP
 #define ARCH_SYM_REJECT_UND(s) (!((s)->st_other & STO_MIPS_PLT))
 
 #define CRTJMP(pc,sp) __asm__ __volatile__( \

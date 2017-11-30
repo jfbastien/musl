@@ -11,12 +11,14 @@ typedef Elf32_Phdr Phdr;
 typedef Elf32_Sym Sym;
 #define R_TYPE(x) ((x)&255)
 #define R_SYM(x) ((x)>>8)
+#define R_INFO ELF32_R_INFO
 #else
 typedef Elf64_Ehdr Ehdr;
 typedef Elf64_Phdr Phdr;
 typedef Elf64_Sym Sym;
 #define R_TYPE(x) ((x)&0x7fffffff)
 #define R_SYM(x) ((x)>>32)
+#define R_INFO ELF64_R_INFO
 #endif
 
 /* These enum constants provide unmatchable default values for
@@ -81,6 +83,10 @@ struct fdpic_dummy_loadmap {
 
 #ifndef NEED_MIPS_GOT_RELOCS
 #define NEED_MIPS_GOT_RELOCS 0
+#endif
+
+#ifndef DT_DEBUG_INDIRECT
+#define DT_DEBUG_INDIRECT 0
 #endif
 
 #define AUX_CNT 32
