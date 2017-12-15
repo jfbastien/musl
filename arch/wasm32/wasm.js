@@ -34,8 +34,6 @@ if (typeof process === 'object' && typeof require === 'function') { // This is n
   const nodePath = require('path');
   var read = function(file_path) {
     filename = nodePath['normalize'](file_path);
-    console.log(file_path);
-    console.log(filename);
     return nodeFS['readFileSync'](filename);
   }
   var print = console.log;
