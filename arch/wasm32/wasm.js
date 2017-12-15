@@ -28,6 +28,18 @@ var heap;
 var heap_uint8;
 var heap_uint32;
 
+if (typeof process === 'object' && typeof require === 'function') { // This is node.js
+  // Emulate JS shell behavior used below
+  const nodeFS = require('fs');
+  const nodePath = require('path');
+  var read = function(file_path) {
+    filename = nodePath['normalize'](file_path);
+    return nodeFS['readFileSync'](filename);
+  }
+  var print = console.log;
+  arguments = process['argv'].slice(2);
+}
+
 function setHeap(h) {
   heap = h
   heap_uint8 = new Uint8Array(heap);
