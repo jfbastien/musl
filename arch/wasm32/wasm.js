@@ -274,6 +274,13 @@ var math = (function() {
   };
 })();
 
+var unwind = (function() {
+  return {
+    _Unwind_RaiseException: NYI('_Unwind_RaiseException'),
+    _Unwind_DeleteException: NYI('_Unwind_DeleteException'),
+  };
+})();
+
 var runtime = (function() {
   return {
     // TODO create a complete list from:
@@ -1387,7 +1394,7 @@ var ffi = (function() {
   var functions = {env:{memory: memory}};
   var libraries = [
     musl_hack, // Keep first, overriden later.
-    builtins, ctype, math, runtime, stdio, stdlib, string, unix,
+    builtins, ctype, math, runtime, stdio, stdlib, string, unix, unwind,
     syscall // Keep last.
   ];
   for (var l in libraries)
