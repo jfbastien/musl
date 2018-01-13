@@ -25,6 +25,7 @@ var heap_size_bytes = 16 * 1024 * 1024;
 var heap_size_pages = heap_size_bytes / (64 * 1024);
 var memory = new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages})
 var heap;
+var heap_end;
 var heap_uint8;
 var heap_uint32;
 
@@ -1333,25 +1334,40 @@ syscall_numbers = (function() {
   return mapping;
 })();
 
+function syscall_writev(fd, iov, iovcnt) {
+  // We only know how to write to STDOUT
+  if (fd != 1)
+    return -1;
+  var iov32 = iov / 4;
+  var rtn = 0;
+  for (var i = 0; i < iovcnt; i++) {
+    var ptr = heap_uint32[iov32];
+    iov32++;
+    var len = heap_uint32[iov32];
+    iov32++;
+    if (len > 0) {
+      stdio.__write_stdout(stringFromHeap(ptr, len));
+      rtn += len;
+    }
+  }
+  return rtn;
+}
+
+function syscall_brk(value) {
+  if (value != 0)
+    heap_end = value;
+  return heap_end;
+}
+
 function syscall_impl(n) {
   // Special case for writev(stdout), essentially allowing printf to work
+  var syscall_args =  Array.from(arguments).slice(1);
   if (n == syscall_numbers["SYS_writev"]) {
-    if (arguments[1] == 1) {
-      var iov = arguments[2] / 4;
-      var iovcnt = arguments[3];
-      var rtn = 0;
-      for (var i = 0; i < iovcnt; i++) {
-        var ptr = heap_uint32[iov];
-        iov++;
-        var len = heap_uint32[iov];
-        iov++;
-        if (len > 0) {
-          stdio.__write_stdout(stringFromHeap(ptr, len));
-          rtn += len;
-        }
-      }
-      return rtn;
+    if (syscall_args[0] == 1) {
+      return syscall_writev(...syscall_args)
     }
+  } else if (n == syscall_numbers["SYS_brk"]) {
+    return syscall_brk(...syscall_args)
   }
 
   // For other syscalls we trace that args and then either return 0 (ignore
@@ -1445,6 +1461,7 @@ for (var i = arguments.length - 1; i > 0; --i) {
 // Load the main module once the ffi object has been fully populated.
 var main_module = arguments[0];
 modules[0] = load_wasm(main_module);
+heap_end = modules[0].exports.__heap_base
 
 // TODO check that `main` exists in modules[0].exports and error out if not.
 
