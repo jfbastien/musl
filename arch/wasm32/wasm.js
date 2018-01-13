@@ -1354,6 +1354,10 @@ function syscall_writev(fd, iov, iovcnt) {
 }
 
 function syscall_brk(value) {
+  if (value > heap_size_bytes) {
+    print('brk failed: memsize: ' + heap_size_bytes + ' requested: ' + value);
+    return -1;
+  }
   if (value != 0)
     heap_end = value;
   return heap_end;
