@@ -21,8 +21,9 @@
  * both as a hobbling libc and a linker/loader, including dynamic linking.
  */
 
+const PAGE_SIZE = (64 * 1024);
 var heap_size_bytes = 16 * 1024 * 1024;
-var heap_size_pages = heap_size_bytes / (64 * 1024);
+var heap_size_pages = heap_size_bytes / PAGE_SIZE;
 var memory = new WebAssembly.Memory({initial: heap_size_pages, maximum: heap_size_pages})
 var heap;
 var heap_end;
@@ -41,14 +42,15 @@ if (typeof process === 'object' && typeof require === 'function') { // This is n
   arguments = process['argv'].slice(2);
 }
 
-function setHeap(h) {
-  heap = h
+function setHeap(m) {
+  memory = m
+  heap = m.buffer
   heap_uint8 = new Uint8Array(heap);
   heap_uint32 = new Uint32Array(heap);
   heap_size_bytes = heap.byteLength;
 }
 
-setHeap(memory.buffer)
+setHeap(memory)
 
 // Heap access helpers.
 function charFromHeap(ptr) { return String.fromCharCode(heap_uint8[ptr]); }
@@ -1355,8 +1357,11 @@ function syscall_writev(fd, iov, iovcnt) {
 
 function syscall_brk(value) {
   if (value > heap_size_bytes) {
-    print('brk failed: memsize: ' + heap_size_bytes + ' requested: ' + value);
-    return -1;
+    var inc = value - heap_size_bytes;
+    var inc_pages = Math.ceil(inc / PAGE_SIZE);
+    //print("growing memory by " + inc_pages + " pages");
+    memory.grow(inc_pages);
+    setHeap(memory);
   }
   if (value != 0)
     heap_end = value;
@@ -1440,7 +1445,7 @@ function load_wasm(file_path) {
   // the one we created. In this way this code works with modules that
   // import or export their memory.
   if (instance.exports.memory)
-    setHeap(instance.exports.memory.buffer);
+    setHeap(instance.exports.memory);
   return instance;
 }
 
@@ -1465,9 +1470,10 @@ for (var i = arguments.length - 1; i > 0; --i) {
 // Load the main module once the ffi object has been fully populated.
 var main_module = arguments[0];
 modules[0] = load_wasm(main_module);
-heap_end = modules[0].exports.__heap_base
+heap_end = modules[0].exports.__heap_base;
 
-// TODO check that `main` exists in modules[0].exports and error out if not.
+if (!(modules[i].exports.main instanceof Function))
+  throw new Error('main() not found');
 
 try {
   var ret = modules[0].exports.main();
