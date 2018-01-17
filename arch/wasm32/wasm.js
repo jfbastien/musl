@@ -1359,7 +1359,6 @@ function syscall_brk(value) {
   if (value > heap_size_bytes) {
     var inc = value - heap_size_bytes;
     var inc_pages = Math.ceil(inc / PAGE_SIZE);
-    //print("growing memory by " + inc_pages + " pages");
     memory.grow(inc_pages);
     setHeap(memory);
   }
