@@ -43,6 +43,9 @@ if (typeof process === 'object' && typeof require === 'function') { // This is n
 }
 
 function setHeap(m) {
+  // TODO(sbc): Handle the case where wasm calls grow_memory.  Currently we
+  // call setHeap when we modify the memory from JavaScript, but not when
+  // the wasm code modifies is.
   memory = m
   heap = m.buffer
   heap_uint8 = new Uint8Array(heap);
