@@ -284,6 +284,7 @@ var unwind = (function() {
   return {
     _Unwind_RaiseException: NYI('_Unwind_RaiseException'),
     _Unwind_DeleteException: NYI('_Unwind_DeleteException'),
+    _Unwind_ForcedUnwind: NYI('_Unwind_ForcedUnwind'),
   };
 })();
 
