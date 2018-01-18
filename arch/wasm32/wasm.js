@@ -1475,11 +1475,11 @@ var main_module = arguments[0];
 modules[0] = load_wasm(main_module);
 heap_end = modules[0].exports.__heap_base;
 
-if (!(modules[i].exports.main instanceof Function))
+if (!(modules[0].exports.main instanceof Function))
   throw new Error('main() not found');
 
 try {
-  if (modules[i].exports.__wasm_call_ctors instanceof Function)
+  if (modules[0].exports.__wasm_call_ctors instanceof Function)
     modules[0].exports.__wasm_call_ctors();
   var ret = modules[0].exports.main();
   stdio.__flush_stdout();
