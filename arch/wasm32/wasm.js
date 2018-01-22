@@ -1471,19 +1471,19 @@ for (var i = arguments.length - 1; i > 0; --i) {
 }
 
 // Load the main module once the ffi object has been fully populated.
-var main_module = arguments[0];
-modules[0] = load_wasm(main_module);
-heap_end = modules[0].exports.__heap_base;
+var main_module_name = arguments[0];
+main_module = modules[0] = load_wasm(main_module_name);
+heap_end = main_module.exports.__heap_base;
 
-if (!(modules[0].exports.main instanceof Function))
+if (!(main_module.exports.main instanceof Function))
   throw new Error('main() not found');
 
 try {
-  if (modules[0].exports.__wasm_call_ctors instanceof Function)
-    modules[0].exports.__wasm_call_ctors();
-  var ret = modules[0].exports.main();
+  if (main_module.exports.__wasm_call_ctors instanceof Function)
+    main_module.exports.__wasm_call_ctors();
+  var ret = main_module.exports.main();
   stdio.__flush_stdout();
-  print(main_module + '::main() returned ' + ret);
+  print(main_module_name + '::main() returned ' + ret);
   if (ret != stdlib.EXIT_SUCCESS)
     throw new Error('main reported failure');
 } catch (e) {
