@@ -1,7 +1,9 @@
 # We require 3.9 because of the use of $<TARGET_OBJECTS:crt1>
 cmake_minimum_required(VERSION 3.9)
-project(MUSL)
-enable_language(C ASM)
+# Disable the compiler check since this involves linking aginst libc which
+# in most cases doesn't exist when building musl
+set(CMAKE_C_COMPILER_WORKS ON)
+project(MUSL C ASM)
 include(CheckCCompilerFlag)
 
 # TODO(sbc): Add more arch detection here
