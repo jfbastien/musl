@@ -4,13 +4,15 @@ project(MUSL)
 enable_language(C ASM)
 include(CheckCCompilerFlag)
 
-if(WASM)
+# TODO(sbc): Add more arch detection here
+if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "wasm32")
   set(ARCH "wasm32")
+  set(WASM 1)
 elseif(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
   set(ARCH "x86_64")
 else()
   error("Could not detect ARCH")
-endif(WASM)
+endif()
 
 set(EMPTY_LIB_NAMES m rt pthread crypt util xnet resolv dl)
 
@@ -78,6 +80,7 @@ add_custom_command(
   ${MUSL_SOURCE_DIR}/VERSION
 )
 
+# TODO(sbc): Remove dependency on sed to increase portability
 add_custom_command(
   OUTPUT ${MUSL_BINARY_DIR}/include/bits/syscall.h
   COMMAND
@@ -86,6 +89,7 @@ add_custom_command(
   DEPENDS ${MUSL_SOURCE_DIR}/arch/${ARCH}/bits/syscall.h.in
 )
 
+# TODO(sbc): Remove dependency on sed to increase portability
 add_custom_command(
   OUTPUT ${MUSL_BINARY_DIR}/include/bits/alltypes.h
   COMMAND
