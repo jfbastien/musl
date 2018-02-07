@@ -65,12 +65,15 @@ set(WARNING_FLAGS
  -Wno-unknown-pragmas
 )
 
-foreach(flag IN LISTS OPTIONAL_FLAGS WARNING_FLAGS)
-  check_c_compiler_flag(${flag} FLAG_${flag})
-  if(FLAG_${flag})
-    add_definitions(${flag})
-  endif(FLAG_${flag})
-endforeach(flag)
+foreach(FLAG IN LISTS OPTIONAL_FLAGS WARNING_FLAGS)
+  set(FLAGNAME FLAG${FLAG})
+  string(MAKE_C_IDENTIFIER ${FLAGNAME} FLAGNAME)
+  string(TOUPPER ${FLAGNAME} FLAGNAME)
+  check_c_compiler_flag(${FLAG} ${FLAGNAME})
+  if(${FLAGNAME})
+    add_definitions(${FLAG})
+  endif(${FLAGNAME})
+endforeach(FLAG)
 
 set(CMAKE_SHARED_LINKER_FLAGS "-nostdlib -Wl,-e,_dlstart")
 
