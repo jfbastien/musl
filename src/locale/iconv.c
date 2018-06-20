@@ -16,6 +16,9 @@
 #define WCHAR_T     0306
 #define US_ASCII    0307
 #define UTF_8       0310
+#define UTF_16      0312
+#define UTF_32      0313
+#define UCS2        0314
 #define EUC_JP      0320
 #define SHIFT_JIS   0321
 #define ISO2022_JP  0322
@@ -35,13 +38,16 @@
 static const unsigned char charmaps[] =
 "utf8\0char\0\0\310"
 "wchart\0\0\306"
-"ucs2\0ucs2be\0\0\304"
+"ucs2be\0\0\304"
 "ucs2le\0\0\305"
-"utf16\0utf16be\0\0\302"
+"utf16be\0\0\302"
 "utf16le\0\0\301"
-"ucs4\0ucs4be\0utf32\0utf32be\0\0\300"
+"ucs4be\0utf32be\0\0\300"
 "ucs4le\0utf32le\0\0\303"
 "ascii\0usascii\0iso646\0iso646us\0\0\307"
+"utf16\0\0\312"
+"ucs4\0utf32\0\0\313"
+"ucs2\0\0\314"
 "eucjp\0\0\320"
 "shiftjis\0sjis\0\0\321"
 "iso2022jp\0\0\322"
@@ -145,6 +151,9 @@ iconv_t iconv_open(const char *to, const char *from)
 	iconv_t cd = combine_to_from(t, f);
 
 	switch (charmaps[f]) {
+	case UTF_16:
+	case UTF_32:
+	case UCS2:
 	case ISO2022_JP:
 		scd = malloc(sizeof *scd);
 		if (!scd) return (iconv_t)-1;
@@ -285,6 +294,31 @@ size_t iconv(iconv_t cd, char **restrict in, size_t *restrict inb, char **restri
 				c = ((c-0xd7c0)<<10) + (d-0xdc00);
 			}
 			break;
+		case UCS2:
+		case UTF_16:
+			l = 0;
+			if (!scd->state) {
+				if (*inb < 2) goto starved;
+				c = get_16((void *)*in, 0);
+				scd->state = type==UCS2
+					? c==0xfffe ? UCS2LE : UCS2BE
+					: c==0xfffe ? UTF_16LE : UTF_16BE;
+				if (c == 0xfffe || c == 0xfeff)
+					l = 2;
+			}
+			type = scd->state;
+			continue;
+		case UTF_32:
+			l = 0;
+			if (!scd->state) {
+				if (*inb < 4) goto starved;
+				c = get_32((void *)*in, 0);
+				scd->state = c==0xfffe0000 ? UTF_32LE : UTF_32BE;
+				if (c == 0xfffe0000 || c == 0xfeff)
+					l = 4;
+			}
+			type = scd->state;
+			continue;
 		case SHIFT_JIS:
 			if (c < 128) break;
 			if (c-0xa1 <= 0xdf-0xa1) {
@@ -424,16 +458,24 @@ size_t iconv(iconv_t cd, char **restrict in, size_t *restrict inb, char **restri
 				 * range in the hkscs table then hard-coded
 				 * here. Ugly, yes. */
 				if (c/256 == 0xdc) {
-					if (totype-0300U > 8) k = 2;
-					else k = "\10\4\4\10\4\4\10\2\4"[totype-0300];
-					if (k > *outb) goto toobig;
-					x += iconv(combine_to_from(to, 0),
+					union {
+						char c[8];
+						wchar_t wc[2];
+					} tmp;
+					char *ptmp = tmp.c;
+					size_t tmpx = iconv(combine_to_from(to, find_charmap("utf8")),
 						&(char *){"\303\212\314\204"
 						"\303\212\314\214"
 						"\303\252\314\204"
 						"\303\252\314\214"
 						+c%256}, &(size_t){4},
-						out, outb);
+						&ptmp, &(size_t){sizeof tmp});
+					size_t tmplen = ptmp - tmp.c;
+					if (tmplen > *outb) goto toobig;
+					if (tmpx) x++;
+					memcpy(*out, &tmp, tmplen);
+					*out += tmplen;
+					*outb -= tmplen;
 					continue;
 				}
 				if (!c) goto ilseq;
@@ -505,6 +547,7 @@ size_t iconv(iconv_t cd, char **restrict in, size_t *restrict inb, char **restri
 			if (*outb < 1) goto toobig;
 			if (c<256 && c==legacy_map(tomap, c)) {
 			revout:
+				if (*outb < 1) goto toobig;
 				*(*out)++ = c;
 				*outb -= 1;
 				break;
@@ -589,11 +632,14 @@ size_t iconv(iconv_t cd, char **restrict in, size_t *restrict inb, char **restri
 			*(*out)++ = 'B';
 			*outb -= 8;
 			break;
+		case UCS2:
+			totype = UCS2BE;
 		case UCS2BE:
 		case UCS2LE:
+		case UTF_16:
 		case UTF_16BE:
 		case UTF_16LE:
-			if (c < 0x10000 || type-UCS2BE < 2U) {
+			if (c < 0x10000 || totype-UCS2BE < 2U) {
 				if (c >= 0x10000) c = 0xFFFD;
 				if (*outb < 2) goto toobig;
 				put_16((void *)*out, c, totype);
@@ -608,6 +654,8 @@ size_t iconv(iconv_t cd, char **restrict in, size_t *restrict inb, char **restri
 			*out += 4;
 			*outb -= 4;
 			break;
+		case UTF_32:
+			totype = UTF_32BE;
 		case UTF_32BE:
 		case UTF_32LE:
 			if (*outb < 4) goto toobig;

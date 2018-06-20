@@ -134,6 +134,9 @@ static struct dso *const nodeps_dummy;
 struct debug *_dl_debug_addr = &debug;
 
 __attribute__((__visibility__("hidden")))
+extern int __malloc_replaced;
+
+__attribute__((__visibility__("hidden")))
 void (*const __init_array_start)(void)=0, (*const __fini_array_start)(void)=0;
 
 __attribute__((__visibility__("hidden")))
@@ -158,10 +161,26 @@ static void *laddr(const struct dso *p, size_t v)
 	for (j=0; v-p->loadmap->segs[j].p_vaddr >= p->loadmap->segs[j].p_memsz; j++);
 	return (void *)(v - p->loadmap->segs[j].p_vaddr + p->loadmap->segs[j].addr);
 }
+static void *laddr_pg(const struct dso *p, size_t v)
+{
+	size_t j=0;
+	size_t pgsz = PAGE_SIZE;
+	if (!p->loadmap) return p->base + v;
+	for (j=0; ; j++) {
+		size_t a = p->loadmap->segs[j].p_vaddr;
+		size_t b = a + p->loadmap->segs[j].p_memsz;
+		a &= -pgsz;
+		b += pgsz-1;
+		b &= -pgsz;
+		if (v-a<b-a) break;
+	}
+	return (void *)(v - p->loadmap->segs[j].p_vaddr + p->loadmap->segs[j].addr);
+}
 #define fpaddr(p, v) ((void (*)())&(struct funcdesc){ \
 	laddr(p, v), (p)->got })
 #else
 #define laddr(p, v) (void *)((p)->base + (v))
+#define laddr_pg(p, v) laddr(p, v)
 #define fpaddr(p, v) ((void (*)())laddr(p, v))
 #endif
 
@@ -476,23 +495,16 @@ static void redo_lazy_relocs()
 /* A huge hack: to make up for the wastefulness of shared libraries
  * needing at least a page of dirty memory even if they have no global
  * data, we reclaim the gaps at the beginning and end of writable maps
- * and "donate" them to the heap by setting up minimal malloc
- * structures and then freeing them. */
+ * and "donate" them to the heap. */
 
 static void reclaim(struct dso *dso, size_t start, size_t end)
 {
-	size_t *a, *z;
+	void __malloc_donate(char *, char *);
 	if (start >= dso->relro_start && start < dso->relro_end) start = dso->relro_end;
 	if (end   >= dso->relro_start && end   < dso->relro_end) end = dso->relro_start;
-	start = start + 6*sizeof(size_t)-1 & -4*sizeof(size_t);
-	end = (end & -4*sizeof(size_t)) - 2*sizeof(size_t);
-	if (start>end || end-start < 4*sizeof(size_t)) return;
-	a = laddr(dso, start);
-	z = laddr(dso, end);
-	a[-2] = 1;
-	a[-1] = z[0] = end-start + 2*sizeof(size_t) | 1;
-	z[1] = 1;
-	free(a);
+	if (start >= end) return;
+	char *base = laddr_pg(dso, start);
+	__malloc_donate(base, base+(end-start));
 }
 
 static void reclaim_gaps(struct dso *dso)
@@ -500,7 +512,6 @@ static void reclaim_gaps(struct dso *dso)
 	Phdr *ph = dso->phdr;
 	size_t phcnt = dso->phnum;
 
-	if (DL_FDPIC) return; // FIXME
 	for (; phcnt--; ph=(void *)((char *)ph+dso->phentsize)) {
 		if (ph->p_type!=PT_LOAD) continue;
 		if ((ph->p_flags&(PF_R|PF_W))!=(PF_R|PF_W)) continue;
@@ -807,7 +818,19 @@ static int fixup_rpath(struct dso *p, char *buf, size_t buf_size)
 		origin = p->name;
 	}
 	t = strrchr(origin, '/');
-	l = t ? t-origin : 0;
+	if (t) {
+		l = t-origin;
+	} else {
+		/* Normally p->name will always be an absolute or relative
+		 * pathname containing at least one '/' character, but in the
+		 * case where ldso was invoked as a command to execute a
+		 * program in the working directory, app.name may not. Fix. */
+		origin = ".";
+		l = 1;
+	}
+	/* Disallow non-absolute origins for suid/sgid/AT_SECURE. */
+	if (libc.secure && *origin != '/')
+		return 0;
 	p->rpath = malloc(strlen(p->rpath_orig) + n*l + 1);
 	if (!p->rpath) return -1;
 
@@ -1571,8 +1594,9 @@ _Noreturn void __dls3(size_t *sp)
 		libc.tls_head = tls_tail = &app.tls;
 		app.tls_id = tls_cnt = 1;
 #ifdef TLS_ABOVE_TP
-		app.tls.offset = 0;
-		tls_offset = app.tls.size
+		app.tls.offset = GAP_ABOVE_TP;
+		app.tls.offset += -GAP_ABOVE_TP & (app.tls.align-1);
+		tls_offset = app.tls.offset + app.tls.size
 			+ ( -((uintptr_t)app.tls.image + app.tls.size)
 			& (app.tls.align-1) );
 #else
@@ -1670,6 +1694,12 @@ _Noreturn void __dls3(size_t *sp)
 
 	if (ldso_fail) _exit(127);
 	if (ldd_mode) _exit(0);
+
+	/* Determine if malloc was interposed by a replacement implementation
+	 * so that calloc and the memalign family can harden against the
+	 * possibility of incomplete replacement. */
+	if (find_sym(head, "malloc", 1).dso != &ldso)
+		__malloc_replaced = 1;
 
 	/* Switch to runtime mode: any further failures in the dynamic
 	 * linker are a reportable failure rather than a fatal startup
@@ -1961,7 +1991,7 @@ int dladdr(const void *addr, Dl_info *info)
 		best = p->funcdescs + (bestsym - p->syms);
 
 	info->dli_fname = p->name;
-	info->dli_fbase = p->base;
+	info->dli_fbase = p->map;
 	info->dli_sname = strings + bestsym->st_name;
 	info->dli_saddr = best;
 
