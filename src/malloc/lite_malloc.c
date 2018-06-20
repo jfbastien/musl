@@ -11,7 +11,7 @@ void *__expand_heap(size_t *);
 static void *__simple_malloc(size_t n)
 {
 	static char *cur, *end;
-	static volatile int lock[2];
+	static volatile int lock[1];
 	size_t align=1, pad;
 	void *p;
 
@@ -47,4 +47,14 @@ static void *__simple_malloc(size_t n)
 }
 
 weak_alias(__simple_malloc, malloc);
-weak_alias(__simple_malloc, __malloc0);
+
+static void *__simple_calloc(size_t m, size_t n)
+{
+	if (n && m > (size_t)-1/n) {
+		errno = ENOMEM;
+		return 0;
+	}
+	return __simple_malloc(n * m);
+}
+
+weak_alias(__simple_calloc, calloc);

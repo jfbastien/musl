@@ -13,41 +13,63 @@
 #define pthread __pthread
 
 struct pthread {
+	/* Part 1 -- these fields may be external or
+	 * internal (accessed via asm) ABI. Do not change. */
 	struct pthread *self;
 	void **dtv, *unused1, *unused2;
 	uintptr_t sysinfo;
 	uintptr_t canary, canary2;
-	pid_t tid, pid;
-	int tsd_used, errno_val;
-	volatile int cancel, canceldisable, cancelasync;
-	int detached;
+
+	/* Part 2 -- implementation details, non-ABI. */
+	int tid;
+	int errno_val;
+	volatile int detach_state;
+	volatile int cancel;
+	volatile unsigned char canceldisable, cancelasync;
+	unsigned char tsd_used:1;
+	unsigned char unblock_cancel:1;
+	unsigned char dlerror_flag:1;
 	unsigned char *map_base;
 	size_t map_size;
 	void *stack;
 	size_t stack_size;
+	size_t guard_size;
 	void *start_arg;
 	void *(*start)(void *);
 	void *result;
 	struct __ptcb *cancelbuf;
 	void **tsd;
-	volatile int dead;
 	struct {
 		volatile void *volatile head;
 		long off;
 		volatile void *volatile pending;
 	} robust_list;
-	int unblock_cancel;
 	volatile int timer_id;
 	locale_t locale;
-	volatile int killlock[2];
-	volatile int exitlock[2];
-	volatile int startlock[2];
-	unsigned long sigmask[_NSIG/8/sizeof(long)];
+	volatile int killlock[1];
 	char *dlerror_buf;
-	int dlerror_flag;
 	void *stdio_locks;
+
+	/* Part 3 -- the positions of these fields relative to
+	 * the end of the structure is external and internal ABI. */
 	uintptr_t canary_at_end;
 	void **dtv_copy;
+};
+
+struct start_sched_args {
+	void *start_arg;
+	void *(*start_fn)(void *);
+	sigset_t mask;
+	pthread_attr_t *attr;
+	volatile int futex;
+};
+
+enum {
+	DT_EXITED = 0,
+	DT_EXITING,
+	DT_JOINABLE,
+	DT_DETACHED,
+	DT_DYNAMIC,
 };
 
 struct __timer {
@@ -135,6 +157,12 @@ static inline void __wake(volatile void *addr, int cnt, int priv)
 	if (cnt<0) cnt = INT_MAX;
 	__syscall(SYS_futex, addr, FUTEX_WAKE|priv, cnt) != -ENOSYS ||
 	__syscall(SYS_futex, addr, FUTEX_WAKE, cnt);
+}
+static inline void __futexwait(volatile void *addr, int val, int priv)
+{
+	if (priv) priv = FUTEX_PRIVATE;
+	__syscall(SYS_futex, addr, FUTEX_WAIT|priv, val) != -ENOSYS ||
+	__syscall(SYS_futex, addr, FUTEX_WAIT, val);
 }
 
 void __acquire_ptc(void);
