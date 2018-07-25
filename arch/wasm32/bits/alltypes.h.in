@@ -1,4 +1,4 @@
-#define _Addr int
+#define _Addr long
 #define _Int64 long long
 #define _Reg int
 
