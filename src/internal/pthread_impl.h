@@ -150,6 +150,8 @@ void __vm_unlock(void);
 
 int __timedwait(volatile int *, int, clockid_t, const struct timespec *, int);
 int __timedwait_cp(volatile int *, int, clockid_t, const struct timespec *, int);
+
+#ifndef __wait
 void __wait(volatile int *, volatile int *, int, int);
 static inline void __wake(volatile void *addr, int cnt, int priv)
 {
@@ -164,6 +166,7 @@ static inline void __futexwait(volatile void *addr, int val, int priv)
 	__syscall(SYS_futex, addr, FUTEX_WAIT|priv, val) != -ENOSYS ||
 	__syscall(SYS_futex, addr, FUTEX_WAIT, val);
 }
+#endif
 
 void __acquire_ptc(void);
 void __release_ptc(void);
