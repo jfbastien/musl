@@ -172,9 +172,11 @@ void __acquire_ptc(void);
 void __release_ptc(void);
 void __inhibit_ptc(void);
 
+#ifndef __block_all_sigs
 void __block_all_sigs(void *);
 void __block_app_sigs(void *);
 void __restore_sigs(void *);
+#endif
 
 #define DEFAULT_STACK_SIZE 81920
 #define DEFAULT_GUARD_SIZE 4096
