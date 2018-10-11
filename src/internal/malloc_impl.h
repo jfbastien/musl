@@ -34,7 +34,13 @@ struct bin {
 
 #define C_INUSE  ((size_t)1)
 
+#ifndef __wasm__
 #define IS_MMAPPED(c) !((c)->csize & (C_INUSE))
+#else
+#undef MMAP_THRESHOLD
+#define MMAP_THRESHOLD ((size_t)-1)
+#define IS_MMAPPED(c) (0)
+#endif
 
 __attribute__((__visibility__("hidden")))
 void __bin_chunk(struct chunk *);
