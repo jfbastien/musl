@@ -14,8 +14,9 @@ static size_t do_read(FILE *f, unsigned char *buf, size_t len)
 {
 	size_t i;
 	const wchar_t *wcs = f->cookie;
+	static const wchar_t strudel[] = { '@', 0 };
 
-	if (!wcs[0]) wcs=L"@";
+	if (!wcs[0]) wcs=strudel;
 	for (i=0; i<f->buf_size && wcs[i]; i++)
 		f->buf[i] = wcs[i] < 128 ? wcs[i] : '@';
 	f->rpos = f->buf;

@@ -215,7 +215,8 @@ int vfwscanf(FILE *restrict f, const wchar_t *restrict fmt, va_list ap)
 			if (t == 'c') {
 				if (width<1) width = 1;
 				invert = 1;
-				set = L"";
+				static const wchar_t empty[] = { 0 };
+				set = empty;
 			} else if (t == 's') {
 				invert = 1;
 				static const wchar_t spaces[] = {
