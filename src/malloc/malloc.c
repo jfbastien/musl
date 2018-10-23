@@ -99,6 +99,7 @@ static int bin_index_up(size_t x)
 	if (x <= 32) return x;
 	x--;
 	if (x < 512) return bin_tab[x/8-4] + 1;
+	if (x > 0x1c00) return 63;
 	return bin_tab[x/128-4] + 17;
 }
 
