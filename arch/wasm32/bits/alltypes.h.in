@@ -1,21 +1,22 @@
-#define _Addr long
-#define _Int64 long long
-#define _Reg int
+#define _Addr __PTRDIFF_TYPE__
+#define _Int64 __INT64_TYPE__
+#define _Reg __INT64_TYPE__
 
 TYPEDEF __builtin_va_list va_list;
 TYPEDEF __builtin_va_list __isoc_va_list;
 
 #ifndef __cplusplus
-TYPEDEF unsigned wchar_t;
+TYPEDEF int wchar_t;
 #endif
+TYPEDEF int wint_t;
 
 TYPEDEF float float_t;
 TYPEDEF double double_t;
 
 TYPEDEF struct { long long __ll; long double __ld; } max_align_t;
 
-TYPEDEF long time_t;
-TYPEDEF long suseconds_t;
+TYPEDEF long long time_t;
+TYPEDEF long long suseconds_t;
 
 TYPEDEF struct { union { int __i[9]; volatile int __vi[9]; unsigned __s[9]; } __u; } pthread_attr_t;
 TYPEDEF struct { union { int __i[6]; volatile int __vi[6]; volatile void *volatile __p[6]; } __u; } pthread_mutex_t;
