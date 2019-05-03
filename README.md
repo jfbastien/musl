@@ -1,3 +1,12 @@
+**This repository is no longer active.**
+
+The WebAssembly waterfall now uses the wasi-sysroot instead.
+
+See:
+
+-  https://github.com/WebAssembly/waterfall/
+-  https://github.com/CraneStation/wasi-sysroot
+
 # WebAssembly experiment for musl libc with limited dynamic linking
 
 A [musl experiment][].
